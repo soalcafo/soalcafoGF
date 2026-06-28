@@ -13,3 +13,16 @@ Resolutions to the open questions from [ARCHITECTURE.md](ARCHITECTURE.md) §13. 
 | 6 | Existing-platform integration shape | **Deferred to Phase 4.** Design stays integration-ready. | No Phase 0 impact. |
 | 7 | Hosting / processors | **Deferred**, with one firm constraint: **EU data residency**. Default plan = EU-region managed services (e.g. Vercel `fra1` + Neon EU) with SCCs; fully-EU self-host remains a fallback. Decide before first production deploy. | No application-code impact; decide before deploy. |
 | 2 | Facility ↔ customer worker-PII default | **Top admins only** — `FACILITY_ADMIN` may view customer worker PII directly (every access audited); `FACILITY_STAFF` see only anonymized/aggregated data. The owning customer's HR always sees their own workers. | Phase 0 builds role-based PII masking: PII unmasked for `FACILITY_ADMIN` (audited) + owning-tenant HR; masked for `FACILITY_STAFF`. RLS still enforces tenant isolation underneath. |
+
+## Deployment note — 2026-06-28 — Database connection role (CRITICAL for security)
+
+Supabase's default `postgres` user **bypasses Row-Level Security**, which would defeat tenant
+isolation. This was caught by the isolation test: 2 of 3 checks failed when connecting as `postgres`.
+
+**Resolution:** the application connects as a dedicated restricted role **`app_user`**
+(`NOSUPERUSER NOBYPASSRLS`, granted CRUD on schema `public`). With `app_user`, all 3 isolation
+checks pass against the live Supabase database.
+
+- **`DATABASE_URL`** (app runtime — local **and Vercel**) → MUST use **`app_user`** (pooler, port 6543).
+- **`DIRECT_URL`** (migrations / DDL only) → uses `postgres` (owner, port 5432).
+- If the database is ever recreated, re-create `app_user` and re-grant before relying on isolation.

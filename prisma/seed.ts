@@ -7,6 +7,7 @@
  * Runs inside a transaction that sets the facility context so it works whether or
  * not RLS has already been applied (see prisma/sql/security.sql).
  */
+import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
