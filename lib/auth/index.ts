@@ -55,9 +55,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       return token;
     },
     async session({ session, token }) {
-      if (token.userId) session.user.id = token.userId;
-      session.activeMembershipId = token.activeMembershipId ?? null;
-      session.memberships = token.memberships ?? [];
+      if (token.userId) session.user.id = token.userId as string;
+      session.activeMembershipId = (token.activeMembershipId as string | null | undefined) ?? null;
+      session.memberships = (token.memberships as MembershipSummary[] | undefined) ?? [];
       return session;
     },
   },

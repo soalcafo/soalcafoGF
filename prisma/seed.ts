@@ -77,19 +77,16 @@ async function main() {
       update: {},
       create: { email: adminEmail, name: "Facility Admin", passwordHash, emailVerified: new Date() },
     });
-    await prisma.membership.upsert({
-      where: {
-        userId_scopeType_tenantId_supplierId_role: {
-          userId: user.id,
-          scopeType: "FACILITY",
-          tenantId: null,
-          supplierId: null,
-          role: "FACILITY_ADMIN",
-        },
-      },
-      update: { status: "ACTIVE" },
-      create: { userId: user.id, scopeType: "FACILITY", role: "FACILITY_ADMIN", status: "ACTIVE" },
+    const existingAdmin = await prisma.membership.findFirst({
+      where: { userId: user.id, scopeType: "FACILITY", role: "FACILITY_ADMIN" },
     });
+    if (existingAdmin) {
+      await prisma.membership.update({ where: { id: existingAdmin.id }, data: { status: "ACTIVE" } });
+    } else {
+      await prisma.membership.create({
+        data: { userId: user.id, scopeType: "FACILITY", role: "FACILITY_ADMIN", status: "ACTIVE" },
+      });
+    }
     console.log(`Seeded facility admin: ${adminEmail}`);
   } else {
     console.log("Skipped admin seed (set SEED_ADMIN_EMAIL and SEED_ADMIN_PASSWORD to create one).");
