@@ -1,0 +1,29 @@
+{
+  "common": {
+    "appName": "Training Hub",
+    "signIn": "Sign in",
+    "signOut": "Sign out",
+    "loading": "Loading...",
+    "language": "Language"
+  },
+  "nav": {
+    "catalog": "Catalog",
+    "workers": "Workers",
+    "timeline": "Timeline",
+    "dashboard": "Dashboard"
+  },
+  "home": {
+    "title": "Training Platform",
+    "subtitle": "Browse available trainings, manage your workers, and track completed training hours.",
+    "browseCatalog": "Browse catalog",
+    "goToDashboard": "Go to dashboard"
+  },
+  "auth": {
+    "loginTitle": "Sign in to your account",
+    "loginSubtitle": "Enter your credentials to continue.",
+    "emailLabel": "Email",
+    "passwordLabel": "Password",
+    "submit": "Sign in",
+    "error": "Invalid email or password."
+  }
+}

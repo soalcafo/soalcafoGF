@@ -1,0 +1,29 @@
+{
+  "common": {
+    "appName": "Training Hub",
+    "signIn": "Entrar",
+    "signOut": "Sair",
+    "loading": "A carregar...",
+    "language": "Idioma"
+  },
+  "nav": {
+    "catalog": "Catálogo",
+    "workers": "Colaboradores",
+    "timeline": "Cronologia",
+    "dashboard": "Painel"
+  },
+  "home": {
+    "title": "Plataforma de Formação",
+    "subtitle": "Consulte formações disponíveis, faça a gestão dos seus colaboradores e acompanhe as horas de formação.",
+    "browseCatalog": "Ver catálogo",
+    "goToDashboard": "Ir para o painel"
+  },
+  "auth": {
+    "loginTitle": "Entrar na sua conta",
+    "loginSubtitle": "Introduza as suas credenciais para continuar.",
+    "emailLabel": "Email",
+    "passwordLabel": "Palavra-passe",
+    "submit": "Entrar",
+    "error": "Email ou palavra-passe inválidos."
+  }
+}

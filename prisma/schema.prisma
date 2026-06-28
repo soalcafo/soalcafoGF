@@ -1,0 +1,813 @@
+// Training Hub — data model.
+// See docs/ARCHITECTURE.md (§3) for the full rationale and docs/DECISIONS.md for product decisions.
+//
+// Conventions:
+// - Every customer-owned table carries a non-null `tenantId`; composite indexes lead with it.
+// - Tenant isolation is enforced by Postgres RLS (see the migration), not by Prisma alone.
+// - Cross-tenant integrity is reinforced by composite FKs carrying tenantId.
+// - CompletionRecord and AuditLog are append-only (corrections supersede; never edit/delete).
+// - Several constraints (partial unique indexes, CHECKs, RLS, triggers) live in raw SQL in the
+//   migration because Prisma cannot express them; they are noted with `// SQL:` comments below.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL") // pooled (Supabase transaction pooler) for runtime
+  directUrl = env("DIRECT_URL")   // direct/session connection for migrations
+}
+
+// ─────────────────────────── ENUMS ───────────────────────────
+enum ScopeType {
+  FACILITY
+  CUSTOMER
+  SUPPLIER
+}
+
+enum MembershipRole {
+  FACILITY_ADMIN
+  FACILITY_STAFF
+  COMPANY_ADMIN
+  HR_MANAGER
+  WORKER
+  SUPPLIER_PORTAL // reserved; wired in Phase 4
+}
+
+enum MembershipStatus {
+  INVITED
+  ACTIVE
+  SUSPENDED
+  REVOKED
+}
+
+enum InviteStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+  REVOKED
+}
+
+enum SourceType {
+  INTERNAL
+  SUPPLIER
+  OTHER_FACILITY
+}
+
+enum SourceKind {
+  FACILITY
+  SUPPLIER
+  EXTERNAL_PROVIDER
+  FACILITY_PLATFORM
+}
+
+enum Provenance {
+  ADMIN_MANUAL
+  HR_MANUAL
+  API_IMPORT
+}
+
+enum SyncDirection {
+  PULL_ONLY
+  PUSH_ONLY
+  BIDIRECTIONAL
+}
+
+enum TrainingModality {
+  IN_PERSON
+  ONLINE_LIVE
+  ONLINE_SELF_PACED
+  BLENDED
+}
+
+enum TrainingStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum SessionStatus {
+  SCHEDULED
+  OPEN_FOR_ENROLLMENT
+  FULL
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum EnrollmentStatus {
+  REQUESTED
+  ASSIGNED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+  WAITLISTED
+}
+
+enum CompletionStatus {
+  PASSED
+  FAILED
+  ATTENDED_NO_ASSESSMENT
+  PARTIAL
+  CANCELLED
+}
+
+enum VerificationStatus {
+  SELF_REPORTED
+  EVIDENCE_PROVIDED
+  VERIFIED
+}
+
+enum LawfulBasis {
+  LEGAL_OBLIGATION
+  CONTRACT
+  LEGITIMATE_INTEREST
+  CONSENT
+}
+
+enum ConnectorAuthType {
+  NONE
+  API_KEY
+  OAUTH2
+  BASIC
+}
+
+enum SyncRunState {
+  OK
+  PARTIAL
+  FAILED
+  RUNNING
+}
+
+enum IngestStatus {
+  STAGED
+  MATCHED
+  UPSERTED
+  CONFLICT
+  SKIPPED
+  ERROR
+}
+
+enum AttachmentKind {
+  CERTIFICATE
+  ATTENDANCE_SHEET
+  OTHER_EVIDENCE
+}
+
+enum MirrorState {
+  NONE
+  PENDING
+  SENT
+  ACK
+  FAILED
+}
+
+// ─────────────────────── IDENTITY & TENANCY ───────────────────────
+model Tenant {
+  id            String   @id @default(cuid())
+  name          String
+  legalName     String?
+  vatNumber     String?  @unique
+  slug          String   @unique
+  defaultLocale String   @default("pt-PT")
+  status        String   @default("ACTIVE")
+  catalogMode   String   @default("ALL_PUBLISHED") // "ALL_PUBLISHED" (decision #4) | "ENTITLED_SUBSET" (future)
+  ssoEnabled    Boolean  @default(false)
+
+  workers           Worker[]
+  memberships       Membership[]
+  enrollments       Enrollment[]
+  completions       CompletionRecord[]
+  consents          ConsentRecord[]
+  entitlements      CatalogEntitlement[]
+  privateSources    TrainingSource[]
+  privateTrainings  Training[]
+  invitations       Invitation[]
+  emailDomains      CustomerEmailDomain[]
+  identityProviders TenantIdentityProvider[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([slug])
+}
+
+model User {
+  id             String    @id @default(cuid())
+  email          String    @unique // SQL: stored as citext
+  emailVerified  DateTime?
+  name           String?
+  image          String?
+  passwordHash   String? // argon2id; null for SSO / magic-link-only users
+  locale         String    @default("pt-PT")
+  isActive       Boolean   @default(true)
+  mfaSecretEnc   String? // ENCRYPTED at rest (KMS envelope) — never a plaintext TOTP seed
+  sessionVersion Int       @default(0)
+
+  memberships Membership[]
+  accounts    Account[]
+  sessions    Session[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+}
+
+model Membership {
+  id                String           @id @default(cuid())
+  userId            String
+  scopeType         ScopeType
+  tenantId          String? // set when scopeType = CUSTOMER
+  supplierId        String? // set when scopeType = SUPPLIER (Phase 4)
+  role              MembershipRole
+  status            MembershipStatus @default(INVITED)
+  workerId          String?          @unique // single authoritative login <-> Worker link
+  membershipVersion Int              @default(0)
+  invitedById       String?
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant Tenant? @relation(fields: [tenantId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, scopeType, tenantId, supplierId, role])
+  @@index([tenantId, role, status])
+  @@index([userId, status])
+  // SQL CHECK: exactly one scope FK matches scopeType; role is allowed for that scopeType.
+}
+
+model Worker {
+  id         String @id @default(cuid())
+  tenantId   String
+  employeeNo String
+  firstName  String
+  lastName   String
+  email      String?
+  department String?
+  jobTitle   String?
+
+  hireDate            DateTime?
+  status              String    @default("ACTIVE")
+  // GDPR controls
+  isAnonymized        Boolean   @default(false)
+  legalHold           Boolean   @default(false)
+  processingRestricted Boolean  @default(false)
+
+  tenant      Tenant             @relation(fields: [tenantId], references: [id])
+  enrollments Enrollment[]
+  completions CompletionRecord[]
+  consents    ConsentRecord[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@unique([tenantId, employeeNo])
+  @@unique([id, tenantId]) // composite-FK target (same-tenant guarantee for Enrollment/Completion/Consent)
+  @@index([tenantId, lastName])
+}
+
+model ConsentRecord {
+  id              String      @id @default(cuid())
+  tenantId        String
+  workerId        String
+  purpose         String
+  lawfulBasis     LawfulBasis
+  textVersion     String
+  grantedAt       DateTime?
+  grantedByUserId String?
+  withdrawnAt     DateTime?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  worker Worker @relation(fields: [workerId, tenantId], references: [id, tenantId])
+
+  @@index([tenantId, workerId])
+}
+
+// ─────────────────────── CATALOG & SOURCES ───────────────────────
+model TrainingSource {
+  id             String     @id @default(cuid())
+  sourceType     SourceType
+  kind           SourceKind @default(SUPPLIER)
+  name           String
+  normalizedName String // for idempotent find-or-create
+  slug           String
+  legalName      String?
+  contactEmail   String?
+  website        String?
+  vatNumber      String?
+
+  isTenantPrivate Boolean @default(false) // true only for HR-created OTHER_FACILITY
+  tenantId        String? // set only when isTenantPrivate
+
+  // INBOUND auth (a supplier pushes to /api/v1/ingest/:sourceId) — Phase 3
+  ingestApiKeyHash String?
+  // OUTBOUND pull config (the facility pulls) — Phase 3
+  connectorCode    String?
+  connectorVersion String?
+  authType         ConnectorAuthType @default(NONE)
+  credentialRef    String? // handle into the EU secret store; never an inline secret
+  baseConfig       Json?
+  syncEnabled      Boolean           @default(false)
+  syncSchedule     String?
+  syncDirection    SyncDirection     @default(PULL_ONLY)
+  systemOfRecord   Boolean           @default(false)
+
+  provenance  Provenance @default(ADMIN_MANUAL)
+  externalRef String?
+  isActive    Boolean    @default(true)
+
+  tenant     Tenant?     @relation(fields: [tenantId], references: [id])
+  trainings  Training[]
+  ingestRuns IngestRun[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([sourceType])
+  @@index([tenantId])
+  @@index([syncEnabled, syncSchedule])
+  // SQL partial UNIQUE: (slug) WHERE tenantId IS NULL ; (tenantId, slug) WHERE tenantId IS NOT NULL
+  // SQL partial UNIQUE: (tenantId, normalizedName) WHERE tenantId IS NOT NULL  → idempotent HR find-or-create
+}
+
+model Training {
+  id                String           @id @default(cuid())
+  sourceId          String
+  tenantId          String? // NULL = global catalog; set = tenant-private (OTHER_FACILITY)
+  title             String
+  slug              String
+  summary           String?
+  description       String?
+  modality          TrainingModality @default(IN_PERSON)
+  nominalMinutes    Int
+  language          String           @default("pt-PT")
+  certificationName String?
+  primaryCategoryId String?
+  level             String?
+  status            TrainingStatus   @default(DRAFT)
+  requiresSession   Boolean          @default(true)
+  coverImageUrl     String?
+  externalUrl       String?
+
+  provenance      Provenance @default(ADMIN_MANUAL)
+  externalRef     String?
+  dedupKey        String?
+  contentHash     String?
+  manualOverrides Json? // typed snapshot preserved across an API "upgrade"
+  fieldPrecedence Json? // per-field "api" | "manual"
+  lastSeenAt      DateTime?
+  retiredAt       DateTime?
+
+  source        TrainingSource        @relation(fields: [sourceId], references: [id])
+  tenant        Tenant?               @relation(fields: [tenantId], references: [id])
+  sessions      TrainingSession[]
+  translations  TrainingTranslation[]
+  enrollments   Enrollment[]
+  categoryLinks TrainingCategoryLink[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@unique([sourceId, slug])
+  @@index([tenantId, status])
+  @@index([sourceId])
+  // SQL partial UNIQUE: (sourceId, externalRef) WHERE externalRef IS NOT NULL AND tenantId IS NULL
+  //                     (tenantId, sourceId, externalRef) WHERE tenantId IS NOT NULL AND externalRef IS NOT NULL
+  // SQL partial INDEX:  WHERE tenantId IS NULL AND status = 'PUBLISHED' AND retiredAt IS NULL  (public catalog)
+  // SQL CHECK: tenantId IS NULL OR tenantId = (enrollment.tenantId)  — enforced on Enrollment side
+}
+
+model TrainingTranslation {
+  id          String  @id @default(cuid())
+  trainingId  String
+  locale      String
+  title       String
+  summary     String?
+  description String?
+
+  training Training @relation(fields: [trainingId], references: [id], onDelete: Cascade)
+
+  @@unique([trainingId, locale])
+}
+
+model TrainingSession {
+  id          String  @id @default(cuid())
+  trainingId  String
+  sessionCode String?
+
+  startsAt DateTime @db.Timestamptz(6)
+  endsAt   DateTime @db.Timestamptz(6)
+  timezone String   @default("Europe/Lisbon")
+
+  location   String?
+  onlineUrl  String?
+  isOnline   Boolean @default(false)
+  capacity   Int?
+  seatsTaken Int     @default(0)
+  instructorName String?
+
+  status        SessionStatus @default(SCHEDULED)
+  priceAmount   Decimal?      @db.Decimal(10, 2)
+  priceCurrency String?       @default("EUR")
+
+  provenance  Provenance @default(ADMIN_MANUAL)
+  externalRef String?
+
+  training    Training     @relation(fields: [trainingId], references: [id], onDelete: Cascade)
+  enrollments Enrollment[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([trainingId, startsAt])
+  @@index([status, startsAt])
+  // SQL partial UNIQUE: (trainingId, externalRef) WHERE externalRef IS NOT NULL
+  // SQL: generated tstzrange(startsAt, endsAt) column + GiST index for the timeline.
+}
+
+model TrainingCategory {
+  id                    String  @id @default(cuid())
+  code                  String  @unique
+  parentId              String?
+  isMandatory           Boolean @default(false)
+  defaultValidityMonths Int?
+  expiryLeadDays        Int     @default(60)
+  retentionYears        Int     @default(5) // safe EU default (decision #5; confirm with DPO)
+  lawfulBasis           LawfulBasis @default(LEGAL_OBLIGATION)
+  isActive              Boolean @default(true)
+
+  parent       TrainingCategory?      @relation("CatTree", fields: [parentId], references: [id])
+  children     TrainingCategory[]     @relation("CatTree")
+  translations CategoryTranslation[]
+  links        TrainingCategoryLink[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model CategoryTranslation {
+  id         String @id @default(cuid())
+  categoryId String
+  locale     String
+  name       String
+
+  category TrainingCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([categoryId, locale])
+}
+
+model TrainingCategoryLink {
+  trainingId String
+  categoryId String
+
+  training Training         @relation(fields: [trainingId], references: [id], onDelete: Cascade)
+  category TrainingCategory @relation(fields: [categoryId], references: [id])
+
+  @@id([trainingId, categoryId])
+  @@index([categoryId])
+}
+
+// ─────────────────────── WORKFLOW & RECORDS ───────────────────────
+model Enrollment {
+  id         String  @id @default(cuid())
+  tenantId   String
+  workerId   String
+  trainingId String
+  sessionId  String? // NULL => self-paced / externally-recorded / after-the-fact
+
+  status                EnrollmentStatus @default(ASSIGNED)
+  externalTrainingTitle String? // free-text fallback when no Training row
+  externalProviderName  String?
+
+  plannedMinutes Int
+  plannedStartAt DateTime? @db.Timestamptz(6)
+  plannedEndAt   DateTime? @db.Timestamptz(6)
+  dueAt          DateTime? @db.Timestamptz(6)
+
+  requestedById String?
+  confirmedById String?
+  assignedById  String
+  assignedAt    DateTime @default(now())
+  startedAt     DateTime?
+  notes         String?
+
+  provenance  Provenance @default(HR_MANUAL)
+  externalRef String?
+
+  // bidirectional-sync outbound mirror (Phase 4; present now so 2-way is retrofittable)
+  mirroredExternalId String?
+  mirrorState        MirrorState @default(NONE)
+  mirrorVersion      Int         @default(0)
+  lastMirroredHash   String?
+
+  tenant      Tenant             @relation(fields: [tenantId], references: [id])
+  worker      Worker             @relation(fields: [workerId, tenantId], references: [id, tenantId])
+  training    Training           @relation(fields: [trainingId], references: [id])
+  session     TrainingSession?   @relation(fields: [sessionId], references: [id])
+  completions CompletionRecord[]
+  transitions StatusTransition[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([tenantId, status])
+  @@index([workerId])
+  @@index([tenantId, plannedStartAt])
+  // SQL partial UNIQUE: (workerId, trainingId) WHERE sessionId IS NULL  → no duplicate session-less enrollment
+  // SQL partial UNIQUE: (workerId, trainingId, sessionId) WHERE sessionId IS NOT NULL
+  // SQL partial UNIQUE: (sessionId, workerId) WHERE status NOT IN ('CANCELLED','NO_SHOW')  → one active seat
+  // SQL CHECK: training.requiresSession ⇒ sessionId NOT NULL (except explicit after-the-fact record path)
+  // SQL CHECK/trigger: tenant-private Training must match Enrollment.tenantId; global Training (NULL) allowed.
+}
+
+model StatusTransition {
+  id           String           @id @default(cuid())
+  enrollmentId String
+  fromStatus   EnrollmentStatus?
+  toStatus     EnrollmentStatus
+  changedById  String
+  reason       String?
+  changedAt    DateTime         @default(now())
+
+  enrollment Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+
+  @@index([enrollmentId])
+}
+
+model CompletionRecord {
+  id           String @id @default(cuid())
+  tenantId     String
+  workerId     String
+  enrollmentId String
+
+  completionStatus    CompletionStatus
+  actualMinutes       Int // AUTHORITATIVE completed hours (minutes)
+  completedOn         DateTime           @db.Timestamptz(6)
+  verification        VerificationStatus @default(SELF_REPORTED)
+  sourceTypeSnapshot  SourceType // point-in-time; NOT rewritten on a later claim
+  isMandatorySnapshot Boolean            @default(false)
+  gradeOrScore        String?
+
+  recordedById   String
+  provenance     Provenance @default(HR_MANUAL)
+  reopened       Boolean    @default(false)
+  supersededById String?    @unique
+  externalRef    String?
+
+  supersededBy CompletionRecord? @relation("Supersede", fields: [supersededById], references: [id])
+  supersedes   CompletionRecord? @relation("Supersede")
+
+  tenant     Tenant               @relation(fields: [tenantId], references: [id])
+  worker     Worker               @relation(fields: [workerId, tenantId], references: [id, tenantId])
+  enrollment Enrollment           @relation(fields: [enrollmentId], references: [id])
+  categories CompletionCategory[]
+  certificate Certificate?
+  attachments Attachment[]
+
+  createdAt DateTime @default(now()) // immutable; NO deletedAt (corrections supersede)
+
+  @@index([tenantId, workerId])
+  @@index([tenantId, completedOn])
+  // SQL partial UNIQUE: (enrollmentId) WHERE supersededById IS NULL  → exactly one ACTIVE completion
+  // SQL partial UNIQUE: (tenantId, externalRef) WHERE externalRef IS NOT NULL  → tenant-scoped idempotency
+  // SQL trigger: assert (tenantId, workerId) == enrollment.(tenantId, workerId)  → no misattribution
+}
+
+model CompletionCategory {
+  completionId String
+  categoryId   String
+  isMandatory  Boolean
+
+  completion CompletionRecord @relation(fields: [completionId], references: [id], onDelete: Cascade)
+
+  @@id([completionId, categoryId])
+  @@index([categoryId])
+}
+
+model Certificate {
+  id                String    @id @default(cuid())
+  completionId      String    @unique
+  certificateNumber String?
+  issuedAt          DateTime
+  validFrom         DateTime?
+  validUntil        DateTime?
+  issuingBody       String?
+  attachmentId      String?
+
+  completion CompletionRecord @relation(fields: [completionId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([validUntil])
+}
+
+model Attachment {
+  id           String         @id @default(cuid())
+  tenantId     String? // file metadata cannot cross tenants
+  completionId String?
+  kind         AttachmentKind
+  storageKey   String // random, unguessable; bucket has NO public read
+  fileName     String
+  mimeType     String
+  sizeBytes    Int
+  containsPii  Boolean        @default(true)
+  uploadedById String
+  uploadedAt   DateTime       @default(now())
+
+  completion CompletionRecord? @relation(fields: [completionId], references: [id])
+
+  @@index([completionId])
+  @@index([tenantId])
+}
+
+// ─────────────────────── INTEGRATION & AUDIT ───────────────────────
+model IngestRun {
+  id            String       @id @default(cuid())
+  sourceId      String
+  connectorCode String
+  startedAt     DateTime     @default(now())
+  finishedAt    DateTime?
+  state         SyncRunState @default(RUNNING)
+  cursorBefore  Json?
+  cursorAfter   Json?
+  fetched       Int          @default(0)
+  upserted      Int          @default(0)
+  skipped       Int          @default(0)
+  conflicts     Int          @default(0)
+  errorText     String?
+
+  source  TrainingSource  @relation(fields: [sourceId], references: [id])
+  records IngestedRecord[]
+
+  @@index([sourceId, startedAt])
+}
+
+model IngestedRecord {
+  id                      String       @id @default(cuid())
+  runId                   String
+  sourceId                String
+  externalRef             String
+  recordKind              String // "TRAINING" | "COMPLETION"
+  rawPayload              Json // PURGED after retention window once UPSERTED (may contain external PII)
+  normalized              Json
+  contentHash             String
+  normalizedSchemaVersion String
+  connectorVersion        String
+  status                  IngestStatus @default(STAGED)
+  matchedTrainingId       String?
+  matchedWorkerId         String?
+  tenantId                String?
+  note                    String?
+
+  run IngestRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([sourceId, externalRef, contentHash])
+  @@index([status])
+  @@index([recordKind])
+}
+
+model MatchCandidate {
+  id               String    @id @default(cuid())
+  ingestedRecordId String
+  trainingId       String?
+  workerId         String?
+  score            Float
+  reason           Json
+  resolved         Boolean   @default(false)
+  decision         String?
+  decidedBy        String?
+  decidedAt        DateTime?
+  createdAt        DateTime  @default(now())
+
+  @@index([resolved])
+}
+
+model SourceSyncState {
+  id        String       @id @default(cuid())
+  sourceId  String       @unique
+  cursor    Json?
+  lastRunAt DateTime?
+  lastState SyncRunState @default(OK)
+}
+
+model AuditLog {
+  id                   String   @id @default(cuid())
+  tenantId             String?
+  actorUserId          String?
+  actorMembershipId    String?
+  impersonatedWorkerId String?
+  action               String
+  entityType           String?
+  entityId             String?
+  pii                  Boolean  @default(false)
+  changedFields        Json? // field NAMES + non-PII only — never raw PII (keeps audit GDPR-safe)
+  ip                   String?
+  userAgent            String?
+  createdAt            DateTime @default(now())
+
+  @@index([tenantId, entityType, entityId])
+  @@index([actorUserId, createdAt])
+  @@index([createdAt])
+}
+
+model CatalogEntitlement {
+  tenantId   String
+  trainingId String
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@id([tenantId, trainingId])
+  // Used only when Tenant.catalogMode = 'ENTITLED_SUBSET' (future; default is ALL_PUBLISHED).
+}
+
+model Invitation {
+  id          String       @id @default(cuid())
+  email       String
+  tenantId    String?
+  scopeType   ScopeType
+  role        MembershipRole
+  tokenHash   String       @unique
+  status      InviteStatus @default(PENDING)
+  invitedById String?
+  workerId    String? // pre-link a worker record when inviting a worker to log in
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([email])
+  @@index([tenantId, status])
+}
+
+model CustomerEmailDomain {
+  id       String  @id @default(cuid())
+  tenantId String
+  domain   String  @unique
+  verified Boolean @default(false)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+}
+
+model TenantIdentityProvider {
+  id        String  @id @default(cuid())
+  tenantId  String
+  protocol  String // "OIDC" | "SAML"  (Phase 4)
+  configRef String // handle into the secret store
+  isActive  Boolean @default(false)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+}
+
+// ─────────────────────── AUTH.JS ADAPTER TABLES ───────────────────────
+// Standard @auth/prisma-adapter models. Under the JWT session strategy the `Session`
+// table is unused, but it is kept for adapter compatibility and a future switch.
+model Account {
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([provider, providerAccountId])
+}
+
+model Session {
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@id([identifier, token])
+}
