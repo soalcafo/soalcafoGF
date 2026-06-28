@@ -20,7 +20,7 @@ export default async function LoginPage({
     const email = String(formData.get("email") ?? "");
     const password = String(formData.get("password") ?? "");
     try {
-      await signIn("credentials", { email, password, redirectTo: `/${locale}` });
+      await signIn("credentials", { email, password, redirectTo: `/${locale}/dashboard` });
     } catch (err) {
       // A successful signIn throws a redirect (re-thrown below); only auth failures land here.
       if (err instanceof AuthError) {

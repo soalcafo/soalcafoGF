@@ -25,5 +25,12 @@
     "passwordLabel": "Password",
     "submit": "Sign in",
     "error": "Invalid email or password."
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "welcome": "Welcome",
+    "role": "Role",
+    "signOut": "Sign out",
+    "comingSoon": "Features (training catalog, workers, timeline) are coming in the next phases."
   }
 }

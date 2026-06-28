@@ -25,5 +25,12 @@
     "passwordLabel": "Palavra-passe",
     "submit": "Entrar",
     "error": "Email ou palavra-passe inválidos."
+  },
+  "dashboard": {
+    "title": "Painel",
+    "welcome": "Bem-vindo",
+    "role": "Função",
+    "signOut": "Sair",
+    "comingSoon": "As funcionalidades (catálogo de formações, colaboradores, cronologia) serão adicionadas nas próximas fases."
   }
 }
