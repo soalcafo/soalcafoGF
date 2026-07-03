@@ -40,6 +40,15 @@ export const CAPABILITIES = [
   "audit.read",
   "identityProvider.configure",
   "impersonate.customer",
+  // Supplier-centric model (Phase 1)
+  "supplier.account.manage", // HR: create/manage supplier accounts + logins
+  "supplier.offer.manage", // supplier: CRUD own offers/trainings
+  "supplier.session.manage", // supplier: own sessions/calendar
+  "supplier.enrollment.manage", // supplier: enrol workers into own trainings
+  "supplier.completion.record", // supplier: record completions for own trainings
+  "supplier.import.configure", // HR/supplier: configure API feed
+  "worker.read.enrolled", // supplier: enrolled-only workers (PII-masked)
+  "attendance.mark", // supplier: Assiduidade for own sessions
 ] as const;
 
 export type Capability = (typeof CAPABILITIES)[number];
@@ -113,6 +122,8 @@ const COMPANY_ADMIN: Capability[] = [
   "gdpr.erase",
   "audit.read",
   "identityProvider.configure",
+  "supplier.account.manage",
+  "supplier.import.configure",
 ];
 
 const HR_MANAGER: Capability[] = [
@@ -130,6 +141,8 @@ const HR_MANAGER: Capability[] = [
   "hours.read.self",
   "report.read",
   "timeline.view.tenant",
+  "supplier.account.manage",
+  "supplier.import.configure",
 ];
 
 // Worker capabilities are SELF-only; the self scoping is enforced by forWorker()
@@ -145,8 +158,22 @@ const WORKER: Capability[] = [
   "gdpr.erase",
 ];
 
-// Phase 4 — supplier self-service portal (not wired in MVP).
-const SUPPLIER_PORTAL: Capability[] = ["catalog.training.manage", "catalog.browse"];
+// Per-company supplier portal (supplier-centric model). Deliberately has NO tenant-wide
+// worker/hours/catalog-management capabilities — a supplier is confined to its own data
+// and its own actively-enrolled workers (enforced by RLS + forSupplier).
+const SUPPLIER_PORTAL: Capability[] = [
+  "catalog.browse", // own offers only (RLS-narrowed)
+  "supplier.offer.manage",
+  "supplier.session.manage",
+  "supplier.enrollment.manage",
+  "supplier.completion.record",
+  "certificate.issue", // for own completions
+  "worker.read.enrolled", // enrolled-only workers, PII-masked
+  "attendance.mark",
+  "timeline.view.self", // Cronograma of own trainings
+  "report.read", // CSV export of own trainings/workers
+  "hours.read.self", // hours it delivered
+];
 
 export const ROLE_CAPABILITIES: Record<MembershipRole, ReadonlySet<Capability>> = {
   FACILITY_ADMIN: new Set(FACILITY_ADMIN),

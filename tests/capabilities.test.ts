@@ -76,3 +76,30 @@ describe("role boundaries (matrix invariants)", () => {
     expect(roleHasCapability("COMPANY_ADMIN", "catalog.training.manage")).toBe(false);
   });
 });
+
+describe("supplier-centric model invariants", () => {
+  it("SUPPLIER_PORTAL has NO tenant-wide worker/hours/catalog-manage powers", () => {
+    for (const cap of [
+      "catalog.training.manage",
+      "worker.manage",
+      "worker.read.pii",
+      "hours.read.tenant",
+      "timeline.view.tenant",
+      "membership.invite.worker",
+    ] as const) {
+      expect(roleHasCapability("SUPPLIER_PORTAL", cap)).toBe(false);
+    }
+  });
+
+  it("SUPPLIER_PORTAL manages its own offers and reads only enrolled workers", () => {
+    expect(roleHasCapability("SUPPLIER_PORTAL", "supplier.offer.manage")).toBe(true);
+    expect(roleHasCapability("SUPPLIER_PORTAL", "worker.read.enrolled")).toBe(true);
+    expect(roleHasCapability("SUPPLIER_PORTAL", "attendance.mark")).toBe(true);
+  });
+
+  it("HR roles can create/manage supplier accounts; suppliers cannot", () => {
+    expect(roleHasCapability("COMPANY_ADMIN", "supplier.account.manage")).toBe(true);
+    expect(roleHasCapability("HR_MANAGER", "supplier.account.manage")).toBe(true);
+    expect(roleHasCapability("SUPPLIER_PORTAL", "supplier.account.manage")).toBe(false);
+  });
+});

@@ -309,3 +309,341 @@ DROP TRIGGER IF EXISTS trg_no_delete_audit ON "AuditLog";
 CREATE TRIGGER trg_no_delete_audit
   BEFORE DELETE ON "AuditLog"
   FOR EACH ROW EXECUTE FUNCTION forbid_delete();
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- SUPPLIER-LEVEL RLS (Phase 1.1) — a SECOND isolation dimension AND-ed under tenant.
+--
+-- HR/facility sessions never set app.session_kind='supplier' and behave exactly as before.
+-- A SUPPLIER session (forSupplier) sets app.tenant_id + app.supplier_id + app.session_kind
+-- in one batch; it is confined to its OWN supplier-owned rows and to workers ACTIVELY
+-- enrolled in its OWN trainings. Every predicate uses nullif(...,'') so an empty-string GUC
+-- fails CLOSED, and the supplier branch requires app.session_kind='supplier' so a supplier
+-- session that lost its supplier id matches NOTHING instead of "all suppliers".
+-- Re-runnable / idempotent, like the rest of this file.
+-- ════════════════════════════════════════════════════════════════════════════
+
+-- ── Membership scope/role CHECK: SUPPLIER now requires BOTH tenantId + supplierId (F19) ──
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM "Membership" WHERE "scopeType" = 'SUPPLIER' AND ("tenantId" IS NULL OR "supplierId" IS NULL))
+  THEN RAISE EXCEPTION 'backfill legacy SUPPLIER memberships to (tenantId, supplierId) before applying this constraint'; END IF;
+END $$;
+
+ALTER TABLE "Membership" DROP CONSTRAINT IF EXISTS chk_membership_scope_role;
+ALTER TABLE "Membership" ADD CONSTRAINT chk_membership_scope_role CHECK (
+     ("scopeType" = 'FACILITY' AND "tenantId" IS NULL     AND "supplierId" IS NULL
+        AND "role" IN ('FACILITY_ADMIN', 'FACILITY_STAFF'))
+  OR ("scopeType" = 'CUSTOMER' AND "tenantId" IS NOT NULL AND "supplierId" IS NULL
+        AND "role" IN ('COMPANY_ADMIN', 'HR_MANAGER', 'WORKER'))
+  OR ("scopeType" = 'SUPPLIER' AND "tenantId" IS NOT NULL AND "supplierId" IS NOT NULL
+        AND "role" = 'SUPPLIER_PORTAL')
+);
+
+-- ── Companion CHECKs: a supplier-owned row is ALWAYS inside a company (F19) ──
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_training_supplier_tenant') THEN
+    ALTER TABLE "Training" ADD CONSTRAINT chk_training_supplier_tenant CHECK ("supplierId" IS NULL OR "tenantId" IS NOT NULL);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_source_supplier_tenant') THEN
+    ALTER TABLE "TrainingSource" ADD CONSTRAINT chk_source_supplier_tenant CHECK ("supplierId" IS NULL OR "tenantId" IS NOT NULL);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_attachment_supplier_tenant') THEN
+    ALTER TABLE "Attachment" ADD CONSTRAINT chk_attachment_supplier_tenant CHECK ("supplierId" IS NULL OR "tenantId" IS NOT NULL);
+  END IF;
+END $$;
+
+-- ── Partial index serving the enrolled-only Worker subquery (F5) ──
+CREATE INDEX IF NOT EXISTS "ix_enroll_active_supplier"
+  ON "Enrollment" ("supplierId", "workerId", "tenantId")
+  WHERE "deletedAt" IS NULL AND "status" NOT IN ('CANCELLED', 'NO_SHOW');
+
+-- ── Supplier table: a supplier session sees ONLY its own row (never other suppliers) ──
+ALTER TABLE "Supplier" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "Supplier" FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON "Supplier";
+CREATE POLICY tenant_isolation ON "Supplier"
+  USING (
+    (current_setting('app.session_kind', true) = 'supplier'
+       AND "id" = nullif(current_setting('app.supplier_id', true), ''))
+    OR (coalesce(current_setting('app.session_kind', true), '') <> 'supplier'
+        AND ("tenantId" = nullif(current_setting('app.tenant_id', true), '')
+             OR current_setting('app.is_facility', true) = 'on'))
+  )
+  WITH CHECK (
+    coalesce(current_setting('app.session_kind', true), '') <> 'supplier' -- suppliers never write Supplier rows
+    AND ("tenantId" = nullif(current_setting('app.tenant_id', true), '')
+         OR current_setting('app.is_facility', true) = 'on')
+  );
+
+-- ── Training: supplier sees only its own offers; HR/facility see catalog + global ──
+DROP POLICY IF EXISTS catalog_visibility ON "Training";
+CREATE POLICY catalog_visibility ON "Training"
+  USING (
+    (current_setting('app.session_kind', true) = 'supplier'
+       AND "supplierId" = nullif(current_setting('app.supplier_id', true), ''))
+    OR (coalesce(current_setting('app.session_kind', true), '') <> 'supplier'
+        AND ("tenantId" IS NULL
+             OR "tenantId" = nullif(current_setting('app.tenant_id', true), '')
+             OR current_setting('app.is_facility', true) = 'on'))
+  )
+  WITH CHECK (
+    (current_setting('app.session_kind', true) = 'supplier'
+       AND "tenantId" = nullif(current_setting('app.tenant_id', true), '')
+       AND "supplierId" = nullif(current_setting('app.supplier_id', true), ''))
+    OR (coalesce(current_setting('app.session_kind', true), '') <> 'supplier'
+        AND ("tenantId" = nullif(current_setting('app.tenant_id', true), '')
+             OR current_setting('app.is_facility', true) = 'on'))
+  );
+
+-- ── TrainingSource: same shape as Training ──
+DROP POLICY IF EXISTS source_visibility ON "TrainingSource";
+CREATE POLICY source_visibility ON "TrainingSource"
+  USING (
+    (current_setting('app.session_kind', true) = 'supplier'
+       AND "supplierId" = nullif(current_setting('app.supplier_id', true), ''))
+    OR (coalesce(current_setting('app.session_kind', true), '') <> 'supplier'
+        AND ("tenantId" IS NULL
+             OR "tenantId" = nullif(current_setting('app.tenant_id', true), '')
+             OR current_setting('app.is_facility', true) = 'on'))
+  )
+  WITH CHECK (
+    (current_setting('app.session_kind', true) = 'supplier'
+       AND "tenantId" = nullif(current_setting('app.tenant_id', true), '')
+       AND "supplierId" = nullif(current_setting('app.supplier_id', true), ''))
+    OR (coalesce(current_setting('app.session_kind', true), '') <> 'supplier'
+        AND ("tenantId" = nullif(current_setting('app.tenant_id', true), '')
+             OR current_setting('app.is_facility', true) = 'on'))
+  );
+
+-- ── TrainingSession: denormalized supplierId (trigger-copied from parent Training) ──
+ALTER TABLE "TrainingSession" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "TrainingSession" FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS supplier_visibility ON "TrainingSession";
+CREATE POLICY supplier_visibility ON "TrainingSession"
+  USING (
+    (current_setting('app.session_kind', true) = 'supplier'
+       AND "supplierId" = nullif(current_setting('app.supplier_id', true), ''))
+    OR (coalesce(current_setting('app.session_kind', true), '') <> 'supplier'
+        AND (current_setting('app.is_facility', true) = 'on'
+             OR EXISTS (SELECT 1 FROM "Training" t
+                        WHERE t.id = "TrainingSession"."trainingId"
+                          AND (t."tenantId" IS NULL
+                               OR t."tenantId" = nullif(current_setting('app.tenant_id', true), '')))))
+  )
+  WITH CHECK (
+    coalesce(current_setting('app.session_kind', true), '') <> 'supplier'
+    OR "supplierId" = nullif(current_setting('app.supplier_id', true), '')
+  );
+
+-- ── Worker: HR sees full roster; SUPPLIER sees ONLY its ACTIVELY-enrolled workers (F5) ──
+DROP POLICY IF EXISTS tenant_isolation ON "Worker";
+CREATE POLICY tenant_isolation ON "Worker"
+  USING (
+    (coalesce(current_setting('app.session_kind', true), '') <> 'supplier'
+       AND (current_setting('app.is_facility', true) = 'on'
+            OR "tenantId" = nullif(current_setting('app.tenant_id', true), '')))
+    OR (current_setting('app.session_kind', true) = 'supplier'
+        AND "tenantId" = nullif(current_setting('app.tenant_id', true), '')
+        AND EXISTS (
+          SELECT 1 FROM "Enrollment" e
+          WHERE e."workerId" = "Worker".id
+            AND e."tenantId" = "Worker"."tenantId"
+            AND e."supplierId" = nullif(current_setting('app.supplier_id', true), '')
+            AND e."deletedAt" IS NULL
+            AND e."status" NOT IN ('CANCELLED', 'NO_SHOW')
+        ))
+    OR (nullif(current_setting('app.worker_id', true), '') IS NOT NULL -- worker self (F18)
+        AND "Worker".id = nullif(current_setting('app.worker_id', true), ''))
+  )
+  WITH CHECK ("tenantId" = nullif(current_setting('app.tenant_id', true), '')); -- suppliers never write Worker rows
+
+-- ── Enrollment: supplier narrows on its own denormalized supplierId ──
+DROP POLICY IF EXISTS tenant_isolation ON "Enrollment";
+CREATE POLICY tenant_isolation ON "Enrollment"
+  USING (
+    (current_setting('app.session_kind', true) = 'supplier'
+       AND "tenantId" = nullif(current_setting('app.tenant_id', true), '')
+       AND "supplierId" = nullif(current_setting('app.supplier_id', true), ''))
+    OR (coalesce(current_setting('app.session_kind', true), '') <> 'supplier'
+        AND ("tenantId" = nullif(current_setting('app.tenant_id', true), '')
+             OR current_setting('app.is_facility', true) = 'on'))
+  )
+  WITH CHECK (
+    (current_setting('app.session_kind', true) = 'supplier'
+       AND "tenantId" = nullif(current_setting('app.tenant_id', true), '')
+       AND "supplierId" = nullif(current_setting('app.supplier_id', true), ''))
+    OR (coalesce(current_setting('app.session_kind', true), '') <> 'supplier'
+        AND "tenantId" = nullif(current_setting('app.tenant_id', true), ''))
+  );
+
+-- ── CompletionRecord: supplier narrows on its own denormalized supplierId ──
+DROP POLICY IF EXISTS tenant_isolation ON "CompletionRecord";
+CREATE POLICY tenant_isolation ON "CompletionRecord"
+  USING (
+    (current_setting('app.session_kind', true) = 'supplier'
+       AND "tenantId" = nullif(current_setting('app.tenant_id', true), '')
+       AND "supplierId" = nullif(current_setting('app.supplier_id', true), ''))
+    OR (coalesce(current_setting('app.session_kind', true), '') <> 'supplier'
+        AND ("tenantId" = nullif(current_setting('app.tenant_id', true), '')
+             OR current_setting('app.is_facility', true) = 'on'))
+  )
+  WITH CHECK (
+    (current_setting('app.session_kind', true) = 'supplier'
+       AND "tenantId" = nullif(current_setting('app.tenant_id', true), '')
+       AND "supplierId" = nullif(current_setting('app.supplier_id', true), ''))
+    OR (coalesce(current_setting('app.session_kind', true), '') <> 'supplier'
+        AND "tenantId" = nullif(current_setting('app.tenant_id', true), ''))
+  );
+
+-- ── Attachment (F1): supplier sees ONLY its own; NO tenantId-NULL escape for suppliers ──
+DROP POLICY IF EXISTS tenant_isolation ON "Attachment";
+CREATE POLICY tenant_isolation ON "Attachment"
+  USING (
+    (current_setting('app.session_kind', true) = 'supplier'
+       AND "tenantId" = nullif(current_setting('app.tenant_id', true), '')
+       AND "supplierId" = nullif(current_setting('app.supplier_id', true), ''))
+    OR (coalesce(current_setting('app.session_kind', true), '') <> 'supplier'
+        AND ("tenantId" IS NULL
+             OR "tenantId" = nullif(current_setting('app.tenant_id', true), '')
+             OR current_setting('app.is_facility', true) = 'on'))
+  )
+  WITH CHECK (
+    (current_setting('app.session_kind', true) = 'supplier'
+       AND "tenantId" = nullif(current_setting('app.tenant_id', true), '')
+       AND "supplierId" = nullif(current_setting('app.supplier_id', true), ''))
+    OR (coalesce(current_setting('app.session_kind', true), '') <> 'supplier'
+        AND ("tenantId" IS NULL OR "tenantId" = nullif(current_setting('app.tenant_id', true), '')))
+  );
+
+-- ── Certificate (F11): explicit supplier deliverable, scoped directly by supplierId ──
+ALTER TABLE "Certificate" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "Certificate" FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON "Certificate";
+CREATE POLICY tenant_isolation ON "Certificate"
+  USING (
+    (current_setting('app.session_kind', true) = 'supplier'
+       AND "supplierId" = nullif(current_setting('app.supplier_id', true), ''))
+    OR (coalesce(current_setting('app.session_kind', true), '') <> 'supplier'
+        AND EXISTS (SELECT 1 FROM "CompletionRecord" c WHERE c.id = "Certificate"."completionId"))
+  )
+  WITH CHECK (
+    coalesce(current_setting('app.session_kind', true), '') <> 'supplier'
+    OR "supplierId" = nullif(current_setting('app.supplier_id', true), '')
+  );
+
+-- ── ConsentRecord (F10): supplier sees consents only for its actively-enrolled workers ──
+DROP POLICY IF EXISTS tenant_isolation ON "ConsentRecord";
+CREATE POLICY tenant_isolation ON "ConsentRecord"
+  USING (
+    (coalesce(current_setting('app.session_kind', true), '') <> 'supplier'
+       AND (current_setting('app.is_facility', true) = 'on'
+            OR "tenantId" = nullif(current_setting('app.tenant_id', true), '')))
+    OR (current_setting('app.session_kind', true) = 'supplier'
+        AND "tenantId" = nullif(current_setting('app.tenant_id', true), '')
+        AND EXISTS (SELECT 1 FROM "Enrollment" e
+                    WHERE e."workerId" = "ConsentRecord"."workerId"
+                      AND e."tenantId" = "ConsentRecord"."tenantId"
+                      AND e."supplierId" = nullif(current_setting('app.supplier_id', true), '')
+                      AND e."deletedAt" IS NULL
+                      AND e."status" NOT IN ('CANCELLED', 'NO_SHOW')))
+  )
+  WITH CHECK ("tenantId" = nullif(current_setting('app.tenant_id', true), ''));
+
+-- ── Triggers: keep denormalized supplierId consistent (copy from lineage, reject forgery) ──
+
+-- 4d. TrainingSession.supplierId := parent Training.supplierId
+CREATE OR REPLACE FUNCTION enforce_session_supplier() RETURNS trigger AS $$
+DECLARE t_sup TEXT;
+BEGIN
+  SELECT "supplierId" INTO t_sup FROM "Training" WHERE id = NEW."trainingId";
+  NEW."supplierId" := t_sup;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
+
+DROP TRIGGER IF EXISTS trg_session_supplier ON "TrainingSession";
+CREATE TRIGGER trg_session_supplier
+  BEFORE INSERT OR UPDATE ON "TrainingSession"
+  FOR EACH ROW EXECUTE FUNCTION enforce_session_supplier();
+
+-- 4e. Enrollment.supplierId := parent Training.supplierId; if the training has no supplier
+--     (global catalog / HR in-house) and a supplier session is enrolling, stamp the supplier
+--     from the GUC so the enrollment grants visibility. Rejects any forged mismatch (F2).
+CREATE OR REPLACE FUNCTION enforce_enrollment_supplier() RETURNS trigger AS $$
+DECLARE t_sup TEXT;
+BEGIN
+  SELECT "supplierId" INTO t_sup FROM "Training" WHERE id = NEW."trainingId";
+  IF t_sup IS NOT NULL THEN
+    IF NEW."supplierId" IS NOT NULL AND NEW."supplierId" IS DISTINCT FROM t_sup THEN
+      RAISE EXCEPTION 'enrollment supplierId % does not match parent training supplier %', NEW."supplierId", t_sup;
+    END IF;
+    NEW."supplierId" := t_sup;
+  ELSIF nullif(current_setting('app.supplier_id', true), '') IS NOT NULL THEN
+    NEW."supplierId" := nullif(current_setting('app.supplier_id', true), '');
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
+
+DROP TRIGGER IF EXISTS trg_enrollment_supplier ON "Enrollment";
+CREATE TRIGGER trg_enrollment_supplier
+  BEFORE INSERT OR UPDATE ON "Enrollment"
+  FOR EACH ROW EXECUTE FUNCTION enforce_enrollment_supplier();
+
+-- Extend the existing completion-consistency trigger to ALSO derive supplierId from the
+-- enrollment (copy, reject mismatch) — keeps CompletionRecord.supplierId authoritative (F2).
+CREATE OR REPLACE FUNCTION enforce_completion_consistency() RETURNS trigger AS $$
+DECLARE
+  e_tenant TEXT;
+  e_worker TEXT;
+  e_sup    TEXT;
+BEGIN
+  SELECT e."tenantId", e."workerId", e."supplierId" INTO e_tenant, e_worker, e_sup
+  FROM "Enrollment" e WHERE e.id = NEW."enrollmentId";
+  IF e_tenant IS NULL THEN
+    RAISE EXCEPTION 'CompletionRecord references a non-existent enrollment %', NEW."enrollmentId";
+  END IF;
+  IF e_tenant <> NEW."tenantId" OR e_worker <> NEW."workerId" THEN
+    RAISE EXCEPTION 'CompletionRecord (tenant=%, worker=%) does not match its enrollment (tenant=%, worker=%)',
+      NEW."tenantId", NEW."workerId", e_tenant, e_worker;
+  END IF;
+  IF NEW."supplierId" IS NOT NULL AND NEW."supplierId" IS DISTINCT FROM e_sup THEN
+    RAISE EXCEPTION 'CompletionRecord supplierId % does not match its enrollment supplier %', NEW."supplierId", e_sup;
+  END IF;
+  NEW."supplierId" := e_sup;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
+
+-- 4f. Attachment.supplierId := parent CompletionRecord.supplierId (F1)
+CREATE OR REPLACE FUNCTION enforce_attachment_supplier() RETURNS trigger AS $$
+DECLARE c_sup TEXT;
+BEGIN
+  IF NEW."completionId" IS NOT NULL THEN
+    SELECT "supplierId" INTO c_sup FROM "CompletionRecord" WHERE id = NEW."completionId";
+    NEW."supplierId" := c_sup;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
+
+DROP TRIGGER IF EXISTS trg_attachment_supplier ON "Attachment";
+CREATE TRIGGER trg_attachment_supplier
+  BEFORE INSERT OR UPDATE ON "Attachment"
+  FOR EACH ROW EXECUTE FUNCTION enforce_attachment_supplier();
+
+-- Certificate.supplierId := parent CompletionRecord.supplierId (F11)
+CREATE OR REPLACE FUNCTION enforce_certificate_supplier() RETURNS trigger AS $$
+DECLARE c_sup TEXT;
+BEGIN
+  SELECT "supplierId" INTO c_sup FROM "CompletionRecord" WHERE id = NEW."completionId";
+  NEW."supplierId" := c_sup;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
+
+DROP TRIGGER IF EXISTS trg_certificate_supplier ON "Certificate";
+CREATE TRIGGER trg_certificate_supplier
+  BEFORE INSERT OR UPDATE ON "Certificate"
+  FOR EACH ROW EXECUTE FUNCTION enforce_certificate_supplier();

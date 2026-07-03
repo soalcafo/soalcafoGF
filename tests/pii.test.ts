@@ -12,6 +12,7 @@ function ctxFor(role: MembershipRole): AuthContext {
     scopeType: isFacility ? "FACILITY" : "CUSTOMER",
     scopeId: isFacility ? null : "t1",
     tenantId: isFacility ? null : "t1",
+    supplierId: null,
     role,
     capabilities: ROLE_CAPABILITIES[role],
     workerId: null,

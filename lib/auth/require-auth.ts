@@ -46,7 +46,11 @@ export async function requireAuth(opts?: { capability?: Capability }): Promise<A
     membershipId: membership.id,
     scopeType: membership.scopeType,
     scopeId: membership.tenantId ?? membership.supplierId ?? null,
-    tenantId: membership.scopeType === "CUSTOMER" ? membership.tenantId : null,
+    tenantId:
+      membership.scopeType === "CUSTOMER" || membership.scopeType === "SUPPLIER"
+        ? membership.tenantId
+        : null,
+    supplierId: membership.scopeType === "SUPPLIER" ? membership.supplierId : null,
     role: membership.role,
     capabilities,
     workerId: membership.workerId ?? null,

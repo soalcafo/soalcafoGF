@@ -43,3 +43,12 @@ The product is a **multi-tenant SaaS sold per company**. Refinements from the cl
 **Architecture impact:** `Supplier` becomes a per-tenant entity; a `SUPPLIER` membership carries both `tenantId` + `supplierId`; trainings/offers carry `supplierId`; new RLS scopes suppliers to their own rows and to enrolled workers only. The existing multi-tenant RLS foundation (app_user, tenant GUC, roles, schema) holds — this is an extension, not a rewrite.
 
 **UI reference (client's existing platform screenshots):** worker-trainings list with columns Duração / Local / Início / Fim / Horário / Sigla / Situação (statuses e.g. "A iniciar", "Cancelada"), per-row ⋮ menu, search-by-field, CSV export; user-area sidebar (Perfil, Alterar password, Foto de perfil, Pagamentos, Controlo de Horas, Os meus colaboradores, Ações dos meus colaboradores, Inscrições dos meus colaboradores); section menu (Assiduidade, Cronograma, Colaboradores, Documentos dos colaboradores).
+
+### Supplier identity across companies (2026-07-03)
+
+Core principle: companies must feel the app is "theirs and only theirs" → **no cross-company visibility of anything**, including which suppliers exist in other companies. Therefore:
+
+- **Each company creates its own supplier record.** Worten's "ATEC" ≠ another company's "ATEC" — fully isolated. **No global supplier directory is shown to companies**, and a company can never discover that a supplier already works with someone else. (Explicitly REJECT "show existing companies / prevent cross-company duplicates" — it would leak a supplier's client list and break the ownership feeling.)
+- **Supplier logins are reused via email invitation** (Slack / Google-Docs pattern): HR adds a supplier + enters its contact email → the app emails an invite. If that email already has a login (from another company), accepting simply adds this company to the supplier's account (one login; a company switcher shows only the companies that invited them). If not, they create a login on accept. The inviting company's experience is identical either way and reveals nothing about prior existence.
+- **Within a company**, prevent duplicate supplier records (unique by VAT number / normalized name) — a same-tenant check only, never cross-tenant.
+- Implication: a `User` (login identity) may hold `SUPPLIER` memberships in multiple tenants; the `Supplier` **record/data** is always per-tenant and isolated.

@@ -48,6 +48,32 @@ export async function forWorker<T>(
 }
 
 /**
+ * Run `fn` as a SUPPLIER session — the ONLY sanctioned entry point for supplier data.
+ * Sets both the tenant and supplier GUCs plus a `session_kind='supplier'` discriminator in
+ * one batch, so a supplier query that somehow lost its supplier id fails CLOSED (matches
+ * nothing) rather than falling into the HR "see all suppliers" branch. Confines the session
+ * to its own rows and its own actively-enrolled workers (see prisma/sql/security.sql).
+ */
+export async function forSupplier<T>(
+  tenantId: string,
+  supplierId: string,
+  fn: (tx: TenantClient) => Promise<T>,
+): Promise<T> {
+  if (!tenantId || !supplierId) throw new Error("forSupplier requires a non-empty tenantId and supplierId");
+  if (tenantId === supplierId) throw new Error("forSupplier: tenantId and supplierId must differ");
+  return prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT
+      set_config('app.tenant_id', ${tenantId}, true),
+      set_config('app.supplier_id', ${supplierId}, true),
+      set_config('app.session_kind', 'supplier', true)`;
+    return fn(tx);
+  }, TX_OPTS);
+}
+
+/** Supplier context for headless jobs (API ingestion). Same confinement as forSupplier. */
+export const asSupplierSync = forSupplier;
+
+/**
  * Run `fn` with the facility cross-tenant read context enabled.
  *
  * ⚠️ Only call this AFTER requireAuth() has confirmed a FACILITY membership with
@@ -60,7 +86,12 @@ export async function asFacility<T>(
   opts?: { tenantId?: string },
 ): Promise<T> {
   return prisma.$transaction(async (tx) => {
-    await tx.$queryRaw`SELECT set_config('app.is_facility', 'on', true)`;
+    // Defensively clear any supplier context so facility reads can never combine with a
+    // supplier scope (F4). Empty string is treated as NULL by every policy's nullif(...).
+    await tx.$queryRaw`SELECT
+      set_config('app.supplier_id', '', true),
+      set_config('app.session_kind', '', true),
+      set_config('app.is_facility', 'on', true)`;
     if (opts?.tenantId) {
       await tx.$queryRaw`SELECT set_config('app.tenant_id', ${opts.tenantId}, true)`;
     }

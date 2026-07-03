@@ -164,6 +164,12 @@ enum MirrorState {
   FAILED
 }
 
+enum ScheduleType {
+  WORKING_HOURS // "Laboral"
+  AFTER_HOURS
+  MIXED
+}
+
 // ─────────────────────── IDENTITY & TENANCY ───────────────────────
 model Tenant {
   id            String   @id @default(cuid())
@@ -187,6 +193,7 @@ model Tenant {
   invitations       Invitation[]
   emailDomains      CustomerEmailDomain[]
   identityProviders TenantIdentityProvider[]
+  suppliers         Supplier[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -220,24 +227,62 @@ model Membership {
   id                String           @id @default(cuid())
   userId            String
   scopeType         ScopeType
-  tenantId          String? // set when scopeType = CUSTOMER
-  supplierId        String? // set when scopeType = SUPPLIER (Phase 4)
+  tenantId          String? // set when scopeType = CUSTOMER or SUPPLIER
+  supplierId        String? // set when scopeType = SUPPLIER (with tenantId)
   role              MembershipRole
   status            MembershipStatus @default(INVITED)
   workerId          String?          @unique // single authoritative login <-> Worker link
   membershipVersion Int              @default(0)
   invitedById       String?
 
-  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tenant Tenant? @relation(fields: [tenantId], references: [id])
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant   Tenant?   @relation(fields: [tenantId], references: [id])
+  supplier Supplier? @relation("SupplierMemberships", fields: [supplierId, tenantId], references: [id, tenantId])
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@unique([userId, scopeType, tenantId, supplierId, role])
   @@index([tenantId, role, status])
+  @@index([supplierId, status])
   @@index([userId, status])
-  // SQL CHECK: exactly one scope FK matches scopeType; role is allowed for that scopeType.
+  // SQL CHECK (chk_membership_scope_role): FACILITY→(tenantId NULL, supplierId NULL);
+  //   CUSTOMER→(tenantId set, supplierId NULL); SUPPLIER→(tenantId set, supplierId set).
+}
+
+// A per-company training supplier (NEVER cross-tenant). Suppliers get login accounts
+// (Membership scopeType=SUPPLIER) created/invited by a company's HR; each supplier's
+// data is isolated from other suppliers within the same company (supplier-level RLS).
+model Supplier {
+  id             String  @id @default(cuid())
+  tenantId       String // per-company; suppliers NEVER cross tenants
+  name           String
+  normalizedName String // for idempotent find-or-create
+  slug           String
+  legalName      String?
+  vatNumber      String?
+  contactEmail   String?
+  contactPhone   String?
+  website        String?
+  isAtec         Boolean @default(false) // ATEC-as-supplier marker inside a company
+  status         String  @default("ACTIVE") // ACTIVE | SUSPENDED
+
+  tenant      Tenant             @relation(fields: [tenantId], references: [id])
+  memberships Membership[]       @relation("SupplierMemberships")
+  sources     TrainingSource[]
+  trainings   Training[]
+  sessions    TrainingSession[]
+  enrollments Enrollment[]
+  completions CompletionRecord[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@unique([id, tenantId]) // composite-FK target (same-tenant guarantee)
+  @@unique([tenantId, slug])
+  @@index([tenantId, status])
+  // SQL partial UNIQUE: (tenantId, normalizedName) WHERE deletedAt IS NULL — idempotent HR create
 }
 
 model Worker {
@@ -303,6 +348,7 @@ model TrainingSource {
 
   isTenantPrivate Boolean @default(false) // true only for HR-created OTHER_FACILITY
   tenantId        String? // set only when isTenantPrivate
+  supplierId      String? // set when this source belongs to a per-company supplier
 
   // INBOUND auth (a supplier pushes to /api/v1/ingest/:sourceId) — Phase 3
   ingestApiKeyHash String?
@@ -322,6 +368,7 @@ model TrainingSource {
   isActive    Boolean    @default(true)
 
   tenant     Tenant?     @relation(fields: [tenantId], references: [id])
+  supplier   Supplier?   @relation(fields: [supplierId, tenantId], references: [id, tenantId])
   trainings  Training[]
   ingestRuns IngestRun[]
 
@@ -331,6 +378,7 @@ model TrainingSource {
 
   @@index([sourceType])
   @@index([tenantId])
+  @@index([tenantId, supplierId, syncEnabled])
   @@index([syncEnabled, syncSchedule])
   // SQL partial UNIQUE: (slug) WHERE tenantId IS NULL ; (tenantId, slug) WHERE tenantId IS NOT NULL
   // SQL partial UNIQUE: (tenantId, normalizedName) WHERE tenantId IS NOT NULL  → idempotent HR find-or-create
@@ -340,6 +388,7 @@ model Training {
   id                String           @id @default(cuid())
   sourceId          String
   tenantId          String? // NULL = global catalog; set = tenant-private (OTHER_FACILITY)
+  supplierId        String? // owning per-company supplier; NULL = global catalog or HR in-house
   title             String
   slug              String
   summary           String?
@@ -354,6 +403,7 @@ model Training {
   requiresSession   Boolean          @default(true)
   coverImageUrl     String?
   externalUrl       String?
+  shortCode         String? // "Sigla" fallback when a session has none
 
   provenance      Provenance @default(ADMIN_MANUAL)
   externalRef     String?
@@ -366,6 +416,7 @@ model Training {
 
   source        TrainingSource        @relation(fields: [sourceId], references: [id])
   tenant        Tenant?               @relation(fields: [tenantId], references: [id])
+  supplier      Supplier?             @relation(fields: [supplierId, tenantId], references: [id, tenantId])
   sessions      TrainingSession[]
   translations  TrainingTranslation[]
   enrollments   Enrollment[]
@@ -377,6 +428,7 @@ model Training {
 
   @@unique([sourceId, slug])
   @@index([tenantId, status])
+  @@index([tenantId, supplierId, status])
   @@index([sourceId])
   // SQL partial UNIQUE: (sourceId, externalRef) WHERE externalRef IS NOT NULL AND tenantId IS NULL
   //                     (tenantId, sourceId, externalRef) WHERE tenantId IS NOT NULL AND externalRef IS NOT NULL
@@ -400,6 +452,7 @@ model TrainingTranslation {
 model TrainingSession {
   id          String  @id @default(cuid())
   trainingId  String
+  supplierId  String? // MUST equal parent Training.supplierId (trigger 4d + NOT VALID CHECK)
   sessionCode String?
 
   startsAt DateTime @db.Timestamptz(6)
@@ -409,6 +462,8 @@ model TrainingSession {
   location   String?
   onlineUrl  String?
   isOnline   Boolean @default(false)
+  scheduleType     ScheduleType @default(WORKING_HOURS) // "Horário: Laboral"
+  atClientPremises Boolean      @default(false) // "Nas instalações do cliente"
   capacity   Int?
   seatsTaken Int     @default(0)
   instructorName String?
@@ -421,6 +476,7 @@ model TrainingSession {
   externalRef String?
 
   training    Training     @relation(fields: [trainingId], references: [id], onDelete: Cascade)
+  supplier    Supplier?    @relation(fields: [supplierId], references: [id]) // tenant pinned via parent Training + trigger 4d
   enrollments Enrollment[]
 
   createdAt DateTime  @default(now())
@@ -428,6 +484,7 @@ model TrainingSession {
   deletedAt DateTime?
 
   @@index([trainingId, startsAt])
+  @@index([supplierId, startsAt])
   @@index([status, startsAt])
   // SQL partial UNIQUE: (trainingId, externalRef) WHERE externalRef IS NOT NULL
   // SQL: generated tstzrange(startsAt, endsAt) column + GiST index for the timeline.
@@ -481,6 +538,7 @@ model Enrollment {
   tenantId   String
   workerId   String
   trainingId String
+  supplierId String? // denormalized owner (drives Worker visibility); trigger 4e copies from parent Training
   sessionId  String? // NULL => self-paced / externally-recorded / after-the-fact
 
   status                EnrollmentStatus @default(ASSIGNED)
@@ -512,6 +570,7 @@ model Enrollment {
   worker      Worker             @relation(fields: [workerId, tenantId], references: [id, tenantId])
   training    Training           @relation(fields: [trainingId], references: [id])
   session     TrainingSession?   @relation(fields: [sessionId], references: [id])
+  supplier    Supplier?          @relation(fields: [supplierId, tenantId], references: [id, tenantId])
   completions CompletionRecord[]
   transitions StatusTransition[]
 
@@ -521,6 +580,7 @@ model Enrollment {
 
   @@index([tenantId, status])
   @@index([workerId])
+  @@index([supplierId, workerId, tenantId, status])
   @@index([tenantId, plannedStartAt])
   // SQL partial UNIQUE: (workerId, trainingId) WHERE sessionId IS NULL  → no duplicate session-less enrollment
   // SQL partial UNIQUE: (workerId, trainingId, sessionId) WHERE sessionId IS NOT NULL
@@ -548,6 +608,7 @@ model CompletionRecord {
   tenantId     String
   workerId     String
   enrollmentId String
+  supplierId   String? // denormalized owner (F2); trigger copies from parent Training, rejects mismatch
 
   completionStatus    CompletionStatus
   actualMinutes       Int // AUTHORITATIVE completed hours (minutes)
@@ -569,6 +630,7 @@ model CompletionRecord {
   tenant     Tenant               @relation(fields: [tenantId], references: [id])
   worker     Worker               @relation(fields: [workerId, tenantId], references: [id, tenantId])
   enrollment Enrollment           @relation(fields: [enrollmentId], references: [id])
+  supplier   Supplier?            @relation(fields: [supplierId, tenantId], references: [id, tenantId])
   categories CompletionCategory[]
   certificate Certificate?
   attachments Attachment[]
@@ -576,6 +638,7 @@ model CompletionRecord {
   createdAt DateTime @default(now()) // immutable; NO deletedAt (corrections supersede)
 
   @@index([tenantId, workerId])
+  @@index([tenantId, supplierId])
   @@index([tenantId, completedOn])
   // SQL partial UNIQUE: (enrollmentId) WHERE supersededById IS NULL  → exactly one ACTIVE completion
   // SQL partial UNIQUE: (tenantId, externalRef) WHERE externalRef IS NOT NULL  → tenant-scoped idempotency
@@ -602,17 +665,20 @@ model Certificate {
   validUntil        DateTime?
   issuingBody       String?
   attachmentId      String?
+  supplierId        String? // F11: copied from parent CompletionRecord; scoped directly in RLS
 
   completion CompletionRecord @relation(fields: [completionId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
 
   @@index([validUntil])
+  @@index([supplierId])
 }
 
 model Attachment {
   id           String         @id @default(cuid())
   tenantId     String? // file metadata cannot cross tenants
+  supplierId   String? // F1: copied from parent CompletionRecord (trigger 4f); scoped in RLS
   completionId String?
   kind         AttachmentKind
   storageKey   String // random, unguessable; bucket has NO public read
@@ -627,12 +693,15 @@ model Attachment {
 
   @@index([completionId])
   @@index([tenantId])
+  @@index([tenantId, supplierId])
 }
 
 // ─────────────────────── INTEGRATION & AUDIT ───────────────────────
 model IngestRun {
   id            String       @id @default(cuid())
   sourceId      String
+  tenantId      String? // Phase 3: NOT NULL; stamped from source at run creation
+  supplierId    String? // Phase 3: NOT NULL
   connectorCode String
   startedAt     DateTime     @default(now())
   finishedAt    DateTime?
@@ -666,13 +735,14 @@ model IngestedRecord {
   matchedTrainingId       String?
   matchedWorkerId         String?
   tenantId                String?
+  supplierId              String? // F8: part of the tenant/supplier-scoped dedup key
   note                    String?
 
   run IngestRun @relation(fields: [runId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
 
-  @@unique([sourceId, externalRef, contentHash])
+  @@unique([tenantId, supplierId, sourceId, externalRef, contentHash]) // F8: dedup can't span companies
   @@index([status])
   @@index([recordKind])
 }
@@ -680,6 +750,8 @@ model IngestedRecord {
 model MatchCandidate {
   id               String    @id @default(cuid())
   ingestedRecordId String
+  tenantId         String? // Phase 3: NOT NULL
+  supplierId       String? // Phase 3: NOT NULL
   trainingId       String?
   workerId         String?
   score            Float
@@ -694,9 +766,11 @@ model MatchCandidate {
 }
 
 model SourceSyncState {
-  id        String       @id @default(cuid())
-  sourceId  String       @unique
-  cursor    Json?
+  id         String       @id @default(cuid())
+  sourceId   String       @unique
+  tenantId   String? // Phase 3: NOT NULL
+  supplierId String? // Phase 3: NOT NULL
+  cursor     Json?
   lastRunAt DateTime?
   lastState SyncRunState @default(OK)
 }
@@ -741,6 +815,7 @@ model Invitation {
   status      InviteStatus @default(PENDING)
   invitedById String?
   workerId    String? // pre-link a worker record when inviting a worker to log in
+  supplierId  String? // pre-link a supplier when inviting a supplier login
   expiresAt   DateTime
   acceptedAt  DateTime?
 

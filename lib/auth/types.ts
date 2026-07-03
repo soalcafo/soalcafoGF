@@ -15,8 +15,9 @@ export type AuthContext = {
   userId: string;
   membershipId: string;
   scopeType: ScopeType;
-  scopeId: string | null;
-  tenantId: string | null; // set only when scopeType === "CUSTOMER"
+  scopeId: string | null; // DEPRECATED for data-access decisions — use tenantId/supplierId
+  tenantId: string | null; // set for CUSTOMER and SUPPLIER scopes
+  supplierId: string | null; // set only when scopeType === "SUPPLIER"
   role: MembershipRole;
   capabilities: ReadonlySet<Capability>;
   workerId: string | null; // set when the membership is a WORKER login
