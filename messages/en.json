@@ -72,6 +72,41 @@
       "hint": "Manage your trainings and see the workers enrolled in them. You only ever see your own data — never other suppliers'.",
       "trainings": "Trainings",
       "enrolledWorkers": "Enrolled workers"
+    },
+    "trainings": {
+      "title": "My trainings",
+      "new": "New training",
+      "empty": "No trainings yet. Create your first one.",
+      "col": {
+        "duration": "Duration",
+        "location": "Location",
+        "start": "Start",
+        "end": "End",
+        "schedule": "Schedule",
+        "code": "Code",
+        "status": "Status"
+      },
+      "hoursUnit": "hours",
+      "atClient": "At client premises",
+      "schedule": { "WORKING_HOURS": "Working hours", "AFTER_HOURS": "After hours", "MIXED": "Mixed" },
+      "sessionStatus": {
+        "scheduled": "Not started",
+        "inProgress": "In progress",
+        "completed": "Completed",
+        "cancelled": "Cancelled"
+      },
+      "form": {
+        "titleLabel": "Training name",
+        "durationLabel": "Duration (hours)",
+        "codeLabel": "Code",
+        "locationLabel": "Location",
+        "atClientLabel": "At client premises",
+        "scheduleLabel": "Schedule",
+        "startLabel": "Start date",
+        "endLabel": "End date",
+        "create": "Create training",
+        "errorRequired": "Please fill in the name, duration and dates."
+      }
     }
   }
 }

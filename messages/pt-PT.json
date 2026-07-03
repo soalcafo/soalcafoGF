@@ -72,6 +72,41 @@
       "hint": "Aqui gere as suas formações e vê os colaboradores inscritos nas suas ações. Só vê os seus próprios dados — nunca os de outros fornecedores.",
       "trainings": "Formações",
       "enrolledWorkers": "Colaboradores inscritos"
+    },
+    "trainings": {
+      "title": "As minhas formações",
+      "new": "Nova formação",
+      "empty": "Ainda não tem formações. Crie a primeira.",
+      "col": {
+        "duration": "Duração",
+        "location": "Local",
+        "start": "Início",
+        "end": "Fim",
+        "schedule": "Horário",
+        "code": "Sigla",
+        "status": "Situação"
+      },
+      "hoursUnit": "horas",
+      "atClient": "Nas instalações do cliente",
+      "schedule": { "WORKING_HOURS": "Laboral", "AFTER_HOURS": "Pós-laboral", "MIXED": "Misto" },
+      "sessionStatus": {
+        "scheduled": "A iniciar",
+        "inProgress": "Em curso",
+        "completed": "Concluída",
+        "cancelled": "Cancelada"
+      },
+      "form": {
+        "titleLabel": "Nome da formação",
+        "durationLabel": "Duração (horas)",
+        "codeLabel": "Sigla",
+        "locationLabel": "Local",
+        "atClientLabel": "Nas instalações do cliente",
+        "scheduleLabel": "Horário",
+        "startLabel": "Data de início",
+        "endLabel": "Data de fim",
+        "create": "Criar formação",
+        "errorRequired": "Preencha o nome, a duração e as datas."
+      }
     }
   }
 }

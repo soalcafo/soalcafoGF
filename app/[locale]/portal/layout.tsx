@@ -33,7 +33,10 @@ export default async function PortalLayout({
     await signOut({ redirectTo: `/${locale}` });
   }
 
-  const items = [{ href: "/portal", label: t("nav.dashboard") }];
+  const items = [
+    { href: "/portal", label: t("nav.dashboard") },
+    { href: "/portal/trainings", label: t("nav.trainings") },
+  ];
 
   return (
     <AppShell
