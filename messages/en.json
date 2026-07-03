@@ -64,5 +64,14 @@
       "title": "ATEC Administration",
       "hint": "This is the app vendor (ATEC) area. Customer-company management and integrations are coming soon."
     }
+  },
+  "supplier": {
+    "nav": { "title": "Supplier portal", "dashboard": "Dashboard", "trainings": "My trainings" },
+    "dashboard": {
+      "title": "Supplier portal",
+      "hint": "Manage your trainings and see the workers enrolled in them. You only ever see your own data — never other suppliers'.",
+      "trainings": "Trainings",
+      "enrolledWorkers": "Enrolled workers"
+    }
   }
 }

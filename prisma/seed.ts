@@ -97,6 +97,15 @@ async function main() {
     await seedDemo(adminEmail);
   }
 
+  if (process.env.SEED_SUPPLIER_EMAIL && process.env.SEED_SUPPLIER_PASSWORD) {
+    await seedSupplierLogin(
+      process.env.SEED_SUPPLIER_EMAIL,
+      process.env.SEED_SUPPLIER_PASSWORD,
+      process.env.SEED_SUPPLIER_ID ?? "demo_sup_atec",
+      "demo_tenant",
+    );
+  }
+
   console.log("Seed complete.");
 }
 
@@ -106,8 +115,8 @@ async function seedDemo(hrEmail: string) {
   const DEMO = "demo_tenant";
   await prisma.tenant.upsert({
     where: { id: DEMO },
-    update: {},
-    create: { id: DEMO, name: "Empresa Demo", slug: "empresa-demo" },
+    update: { name: "Worten", slug: "worten" },
+    create: { id: DEMO, name: "Worten", slug: "worten" },
   });
 
   const user = await prisma.user.findUnique({ where: { email: hrEmail } });
@@ -125,13 +134,13 @@ async function seedDemo(hrEmail: string) {
   await prisma.$transaction(async (tx) => {
     await tx.$queryRawUnsafe(`SELECT set_config('app.tenant_id', '${DEMO}', true)`);
     const demoSuppliers: Array<[string, string, boolean, string]> = [
-      ["demo_sup_atec", "ATEC — Palmela", true, "formacao@atec.pt"],
-      ["demo_sup_xpto", "Formação XPTO", false, "geral@xpto.pt"],
+      ["demo_sup_atec", "ATEC", true, "formacao@atec.pt"],
+      ["demo_sup_xpto", "Cegoc", false, "formacao@cegoc.pt"],
     ];
     for (const [id, name, isAtec, contactEmail] of demoSuppliers) {
       await tx.supplier.upsert({
         where: { id },
-        update: {},
+        update: { name, isAtec, contactEmail },
         create: {
           id,
           tenantId: DEMO,
@@ -146,6 +155,28 @@ async function seedDemo(hrEmail: string) {
   });
 
   console.log(`Seeded demo company + HR membership (${hrEmail}) + suppliers.`);
+}
+
+// Creates a supplier LOGIN: a user + a SUPPLIER_PORTAL membership bound to one
+// (tenant, supplier) pair. That user, when they log in, lands in /portal and sees
+// only that supplier's data.
+async function seedSupplierLogin(email: string, password: string, supplierId: string, tenantId: string) {
+  const argon2 = await import("argon2");
+  const passwordHash = await argon2.hash(password, { type: argon2.argon2id });
+  const user = await prisma.user.upsert({
+    where: { email: email.toLowerCase() },
+    update: {},
+    create: { email: email.toLowerCase(), name: "Fornecedor", passwordHash, emailVerified: new Date() },
+  });
+  const existing = await prisma.membership.findFirst({
+    where: { userId: user.id, scopeType: "SUPPLIER", tenantId, supplierId, role: "SUPPLIER_PORTAL" },
+  });
+  if (!existing) {
+    await prisma.membership.create({
+      data: { userId: user.id, scopeType: "SUPPLIER", tenantId, supplierId, role: "SUPPLIER_PORTAL", status: "ACTIVE" },
+    });
+  }
+  console.log(`Seeded supplier login: ${email} -> supplier ${supplierId} in tenant ${tenantId}`);
 }
 
 main()

@@ -64,5 +64,14 @@
       "title": "Administração ATEC",
       "hint": "Esta é a área de fornecedor da aplicação (ATEC). A gestão de empresas clientes e integrações será adicionada em breve."
     }
+  },
+  "supplier": {
+    "nav": { "title": "Portal do fornecedor", "dashboard": "Painel", "trainings": "As minhas formações" },
+    "dashboard": {
+      "title": "Portal do fornecedor",
+      "hint": "Aqui gere as suas formações e vê os colaboradores inscritos nas suas ações. Só vê os seus próprios dados — nunca os de outros fornecedores.",
+      "trainings": "Formações",
+      "enrolledWorkers": "Colaboradores inscritos"
+    }
   }
 }
