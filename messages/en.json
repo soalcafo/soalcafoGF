@@ -57,5 +57,12 @@
       "errorRequired": "Name is required.",
       "errorExists": "A supplier with this name already exists."
     }
+  },
+  "vendor": {
+    "nav": { "title": "Administration", "dashboard": "Dashboard" },
+    "dashboard": {
+      "title": "ATEC Administration",
+      "hint": "This is the app vendor (ATEC) area. Customer-company management and integrations are coming soon."
+    }
   }
 }
