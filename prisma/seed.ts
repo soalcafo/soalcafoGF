@@ -93,7 +93,59 @@ async function main() {
     console.log("Skipped admin seed (set SEED_ADMIN_EMAIL and SEED_ADMIN_PASSWORD to create one).");
   }
 
+  if (process.env.SEED_DEMO && adminEmail) {
+    await seedDemo(adminEmail);
+  }
+
   console.log("Seed complete.");
+}
+
+// Demo company so the HR area is immediately usable: gives the admin user a
+// COMPANY_ADMIN membership in "Empresa Demo" plus a couple of example suppliers.
+async function seedDemo(hrEmail: string) {
+  const DEMO = "demo_tenant";
+  await prisma.tenant.upsert({
+    where: { id: DEMO },
+    update: {},
+    create: { id: DEMO, name: "Empresa Demo", slug: "empresa-demo" },
+  });
+
+  const user = await prisma.user.findUnique({ where: { email: hrEmail } });
+  if (user) {
+    const existing = await prisma.membership.findFirst({
+      where: { userId: user.id, scopeType: "CUSTOMER", tenantId: DEMO, role: "COMPANY_ADMIN" },
+    });
+    if (!existing) {
+      await prisma.membership.create({
+        data: { userId: user.id, scopeType: "CUSTOMER", tenantId: DEMO, role: "COMPANY_ADMIN", status: "ACTIVE" },
+      });
+    }
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.$queryRawUnsafe(`SELECT set_config('app.tenant_id', '${DEMO}', true)`);
+    const demoSuppliers: Array<[string, string, boolean, string]> = [
+      ["demo_sup_atec", "ATEC — Palmela", true, "formacao@atec.pt"],
+      ["demo_sup_xpto", "Formação XPTO", false, "geral@xpto.pt"],
+    ];
+    for (const [id, name, isAtec, contactEmail] of demoSuppliers) {
+      await tx.supplier.upsert({
+        where: { id },
+        update: {},
+        create: {
+          id,
+          tenantId: DEMO,
+          name,
+          normalizedName: name.toLowerCase(),
+          slug: id.replace(/_/g, "-"),
+          isAtec,
+          contactEmail,
+        },
+      });
+    }
+  });
+
+  console.log(`Seeded demo company + HR membership (${hrEmail}) + suppliers.`);
 }
 
 main()

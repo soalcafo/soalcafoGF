@@ -32,5 +32,30 @@
     "role": "Função",
     "signOut": "Sair",
     "comingSoon": "As funcionalidades (catálogo de formações, colaboradores, cronologia) serão adicionadas nas próximas fases."
+  },
+  "hr": {
+    "nav": {
+      "title": "Área de utilizador",
+      "dashboard": "Painel",
+      "suppliers": "Fornecedores",
+      "workers": "Colaboradores"
+    },
+    "dashboard": {
+      "title": "Painel",
+      "hint": "Faça a gestão dos seus fornecedores e colaboradores."
+    },
+    "suppliers": {
+      "title": "Fornecedores",
+      "manage": "Gerir fornecedores",
+      "new": "Novo fornecedor",
+      "name": "Nome",
+      "email": "Email de contacto",
+      "emailHint": "Será usado para enviar o convite de acesso ao fornecedor (em breve).",
+      "status": "Estado",
+      "create": "Criar",
+      "empty": "Ainda não há fornecedores. Crie o primeiro.",
+      "errorRequired": "O nome é obrigatório.",
+      "errorExists": "Já existe um fornecedor com esse nome."
+    }
   }
 }

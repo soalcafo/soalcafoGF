@@ -5,6 +5,7 @@ import { z } from "zod";
 import { authConfig } from "./config";
 import { authAdapter, getActiveMembershipsForUser, getUserByEmail } from "@/lib/db/auth";
 import type { MembershipSummary } from "./types";
+import { pickDefaultMembership } from "./scope";
 
 const credentialsSchema = z.object({
   email: z.string().email(),
@@ -50,7 +51,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           label: m.tenant?.name ?? null,
         }));
         token.memberships = summaries;
-        token.activeMembershipId = summaries[0]?.id ?? null;
+        token.activeMembershipId = pickDefaultMembership(summaries)?.id ?? null;
       }
       return token;
     },

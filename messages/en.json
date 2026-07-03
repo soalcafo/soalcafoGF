@@ -32,5 +32,30 @@
     "role": "Role",
     "signOut": "Sign out",
     "comingSoon": "Features (training catalog, workers, timeline) are coming in the next phases."
+  },
+  "hr": {
+    "nav": {
+      "title": "User area",
+      "dashboard": "Dashboard",
+      "suppliers": "Suppliers",
+      "workers": "Workers"
+    },
+    "dashboard": {
+      "title": "Dashboard",
+      "hint": "Manage your suppliers and workers."
+    },
+    "suppliers": {
+      "title": "Suppliers",
+      "manage": "Manage suppliers",
+      "new": "New supplier",
+      "name": "Name",
+      "email": "Contact email",
+      "emailHint": "Used to send the supplier their access invite (coming soon).",
+      "status": "Status",
+      "create": "Create",
+      "empty": "No suppliers yet. Create your first one.",
+      "errorRequired": "Name is required.",
+      "errorExists": "A supplier with this name already exists."
+    }
   }
 }
