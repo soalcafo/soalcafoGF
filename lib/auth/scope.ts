@@ -1,5 +1,19 @@
 import type { MembershipRole, ScopeType } from "@prisma/client";
-import type { MembershipSummary } from "./types";
+import type { MembershipSummary, AuthContext } from "./types";
+
+/**
+ * Who may access DTP/Certificate (SessionFile) data: the delivering supplier, the owning
+ * company's HR, and the facility — NEVER a WORKER. A worker is a CUSTOMER-scope role, so
+ * without this explicit gate it would take the HR path and could read every DTP + every other
+ * participant's certificate in the company. Pure + centralised so the route, the server actions,
+ * and the RLS-scope selector all agree; unit-tested.
+ */
+export function canAccessSessionFiles(ctx: Pick<AuthContext, "scopeType" | "role" | "tenantId" | "supplierId">): boolean {
+  if (ctx.scopeType === "SUPPLIER") return Boolean(ctx.tenantId && ctx.supplierId);
+  if (ctx.scopeType === "FACILITY") return true;
+  if (ctx.scopeType === "CUSTOMER") return ctx.role !== "WORKER" && Boolean(ctx.tenantId);
+  return false;
+}
 
 /** The landing area for a given scope/role. */
 export function scopeHome(locale: string, scopeType: ScopeType, role: MembershipRole): string {

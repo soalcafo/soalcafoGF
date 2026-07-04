@@ -1,7 +1,13 @@
 import { getTranslations } from "next-intl/server";
 import { revalidatePath } from "next/cache";
 import { requireAuth } from "@/lib/auth/require-auth";
-import { listSessionFiles, createSessionFile, deleteSessionFile, type SessionFileMeta } from "@/lib/db/session-files";
+import {
+  listSessionFiles,
+  createSessionFile,
+  deleteSessionFile,
+  canAccessSessionFiles,
+  type SessionFileMeta,
+} from "@/lib/db/session-files";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,6 +33,8 @@ const MAX_BYTES = 10 * 1024 * 1024;
  */
 export async function SessionFilesSection({ sessionId, pagePath }: { sessionId: string; pagePath: string }) {
   const ctx = await requireAuth();
+  // Workers (and any non-HR/supplier/facility role) never see the files section.
+  if (!canAccessSessionFiles(ctx)) return null;
   const t = await getTranslations("supplier");
   const files = await listSessionFiles(ctx, sessionId);
   const dtp = files.filter((f) => f.kind === "DTP");
@@ -35,16 +43,26 @@ export async function SessionFilesSection({ sessionId, pagePath }: { sessionId: 
   async function upload(formData: FormData) {
     "use server";
     const c = await requireAuth();
+    if (!canAccessSessionFiles(c)) return;
     const file = formData.get("file");
     const rawKind = String(formData.get("kind") ?? "DTP");
     const kind = rawKind === "CERTIFICATE" ? "CERTIFICATE" : "DTP";
     const label = String(formData.get("label") ?? "").trim() || null;
     if (file instanceof File && file.size > 0) {
       if (file.size > MAX_BYTES) throw new Error("File too large (max 10MB)");
-      const mimeType = file.type || "application/octet-stream";
+      // Normalize before the blocklist (params/case are attacker-controlled). NOTE: the real
+      // XSS defense is the download route's attachment+nosniff — this blocklist is secondary.
+      const mimeType = (file.type || "application/octet-stream").split(";")[0]!.trim().toLowerCase();
       if (BLOCKED_MIME.has(mimeType)) throw new Error("Unsupported file type");
       const data = new Uint8Array(await file.arrayBuffer());
-      await createSessionFile(c, { sessionId, kind, fileName: file.name, mimeType, data, label });
+      // A global-catalog session (Training.tenantId NULL) makes the lineage trigger reject the
+      // write; degrade gracefully rather than 500 (unreachable in this app — all courses are
+      // tenant-scoped — but defensive).
+      try {
+        await createSessionFile(c, { sessionId, kind, fileName: file.name, mimeType, data, label });
+      } catch {
+        return;
+      }
       revalidatePath(pagePath);
     }
   }
@@ -52,6 +70,7 @@ export async function SessionFilesSection({ sessionId, pagePath }: { sessionId: 
   async function remove(formData: FormData) {
     "use server";
     const c = await requireAuth();
+    if (!canAccessSessionFiles(c)) return;
     const id = String(formData.get("id") ?? "");
     if (id) {
       await deleteSessionFile(c, id);

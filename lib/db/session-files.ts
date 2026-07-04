@@ -1,6 +1,9 @@
 import "server-only";
 import type { AuthContext } from "@/lib/auth/types";
+import { canAccessSessionFiles } from "@/lib/auth/scope";
 import { forSupplier, forTenant, asFacility, type TenantClient } from "./index";
+
+export { canAccessSessionFiles };
 
 // DTP + Certificate files attached to an Ação (TrainingSession), stored in Postgres. EVERY read
 // and write runs inside the caller's own RLS scope, so Postgres — not app code — decides who can
@@ -9,13 +12,11 @@ import { forSupplier, forTenant, asFacility, type TenantClient } from "./index";
 type FileKind = "DTP" | "CERTIFICATE" | "OTHER";
 
 function runScoped<T>(ctx: AuthContext, fn: (tx: TenantClient) => Promise<T>): Promise<T> {
-  if (ctx.scopeType === "SUPPLIER") {
-    if (!ctx.tenantId || !ctx.supplierId) throw new Error("session-files: supplier scope missing tenant/supplier");
-    return forSupplier(ctx.tenantId, ctx.supplierId, fn);
-  }
+  // Single gate (shared with the route + actions): rejects WORKER and any role not allowed.
+  if (!canAccessSessionFiles(ctx)) throw new Error("session-files: role not permitted to access session files");
+  if (ctx.scopeType === "SUPPLIER") return forSupplier(ctx.tenantId!, ctx.supplierId!, fn);
   if (ctx.scopeType === "FACILITY") return asFacility(fn);
-  if (ctx.tenantId) return forTenant(ctx.tenantId, fn);
-  throw new Error("session-files: no usable scope");
+  return forTenant(ctx.tenantId!, fn); // CUSTOMER, non-WORKER (canAccessSessionFiles guaranteed tenantId)
 }
 
 export type SessionFileMeta = {

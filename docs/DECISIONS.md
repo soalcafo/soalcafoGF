@@ -130,3 +130,17 @@ Implements the switch mechanism behind "one login, one space per client", and th
 - Seed now grants the demo admin a `FACILITY_ADMIN` membership too, so `/admin` is reachable and the switcher shows "Worten" ↔ "Admin". A second demo company **FNAC** is linked to ATEC so `formacao@atec.pt` holds two spaces.
 
 **Next:** DTP + Certificate uploads (file storage), branding (logos), accounts (main/sub + resets).
+
+## Round 7 — 2026-07-04 — Accounts, Formora branding, company logos, DTP/Certificate uploads
+
+**Accounts (super-admin):** `/admin/accounts/[type]/[id]` manages a company's or supplier org's accounts — reset password / reset email / disable 2FA, mark **main vs sub** (new `Membership.isPrimary`), and add accounts (a supplier account provisions one login across every linked company). Gated to `FACILITY_ADMIN` on the page + every server action. `prisma/setup-test-accounts.ts` (idempotent, password via env) set the demo logins: **sofia.fonseca98 = platform super-admin only**; `worten@`/`fnac@` = company admins; `atec@` = ATEC supplier (Worten+FNAC); `btraining@` = new BTraining supplier (Worten). Legacy `formacao@atec.pt` revoked.
+
+**Branding — the product is now "Formora"** (`common.appName`; neutral, NOT ATEC per the client). Login page, tab title, admin copy updated.
+
+**Company logos (zero external setup):** stored on the non-RLS `Tenant` row (`logoData`/`logoMime`), served from `/api/branding/company/[id]` with a versioned, browser-cached URL (+nosniff/CSP). Super-admin uploads/removes per company on the map; the HR header shows the company's logo (falls back to the company name). Worten/FNAC seeded with placeholder logos.
+
+**DTP + Certificate uploads — IN THE DATABASE (client chose zero-setup over Supabase Storage):**
+- New `SessionFile` table stores file bytes on an Ação. `tenantId`+`supplierId` are **derived from the session lineage by a trigger** (`enforce_sessionfile_lineage`), so they can't be forged; RLS mirrors `TrainingSession` (supplier sees only its own, owning company sees its tenant, facility all). Cross-supplier writes are rejected by trigger + WITH CHECK.
+- `lib/db/session-files.ts` runs every read/write in the caller's own RLS scope (`runScoped` → forSupplier/forTenant/asFacility). Download via **auth'd** `/api/session-files/[id]` route → `Content-Disposition: attachment` + `nosniff` (no inline render of user bytes ⇒ no stored-XSS), mime blocklist + 10MB cap on upload. Shared `SessionFilesSection` wired into the supplier portal and HR Ação pages.
+- `tests/isolation/session-files.test.ts` (6 cases) proves the isolation on the live DB. Adversarial 3-lens review run after ship.
+- **Deferred:** migrating file bytes to Supabase Storage (drop-in behind `session-files.ts`) when files get large/numerous; supplier-org logos; company-self logo upload; `sessionVersion` enforcement.
