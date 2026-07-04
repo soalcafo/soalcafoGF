@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
+import { SessionFilesSection } from "@/components/app/session-files";
 import { formatDate, formatHours } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -158,21 +159,11 @@ export default async function ActionDetailPage({
         </CardContent>
       </Card>
 
-      {/* DTP + Certificados (uploads next) */}
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Card>
-          <CardContent className="py-6">
-            <div className="font-medium">{t("module.dtp")}</div>
-            <p className="mt-1 text-sm text-muted-foreground">{t("module.uploadsSoon")}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="py-6">
-            <div className="font-medium">{t("module.certificates")}</div>
-            <p className="mt-1 text-sm text-muted-foreground">{t("module.uploadsSoon")}</p>
-          </CardContent>
-        </Card>
-      </div>
+      {/* DTP + Certificados */}
+      <SessionFilesSection
+        sessionId={actionId}
+        pagePath={`/${locale}/portal/trainings/${courseId}/actions/${actionId}`}
+      />
     </div>
   );
 }

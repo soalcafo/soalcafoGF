@@ -193,6 +193,10 @@
       "dtp": "Dossier Técnico Pedagógico (DTP)",
       "certificates": "Certificados",
       "uploadsSoon": "O carregamento de ficheiros será adicionado em breve.",
+      "upload": "Carregar ficheiro",
+      "noFiles": "Ainda não há ficheiros.",
+      "delete": "Remover",
+      "participant": "Participante (opcional)",
       "hoursUnit": "horas",
       "form": {
         "nameLabel": "Nome do módulo",

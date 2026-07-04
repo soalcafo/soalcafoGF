@@ -10,6 +10,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     headers: {
       "Content-Type": logo.mime,
       "Cache-Control": "public, max-age=86400, immutable",
+      // Rendered via <img>, but a logo opened at its raw URL must not execute (e.g. a scripted SVG).
+      "X-Content-Type-Options": "nosniff",
+      "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; sandbox",
     },
   });
 }

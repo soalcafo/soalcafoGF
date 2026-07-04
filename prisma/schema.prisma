@@ -525,6 +525,7 @@ model TrainingSession {
   supplier    Supplier?        @relation(fields: [supplierId], references: [id]) // tenant pinned via parent Training + trigger 4d
   enrollments Enrollment[]
   modules     TrainingModule[]
+  files       SessionFile[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -554,6 +555,39 @@ model TrainingModule {
   updatedAt DateTime @updatedAt
 
   @@index([sessionId, orderIndex])
+}
+
+enum SessionFileKind {
+  DTP // Dossier Técnico-Pedagógico (one per Ação)
+  CERTIFICATE // Certificado (usually one per participant)
+  OTHER
+}
+
+// A file attached to an Ação de Formação (TrainingSession): the supplier's DTP and the
+// participants' Certificados. Bytes are stored in Postgres for now (MVP; swap to object
+// storage later behind the same helper). tenantId + supplierId are denormalized from the
+// parent session's lineage by a trigger (enforce_sessionfile_lineage) and drive RLS the
+// same way TrainingSession does: a supplier sees ONLY its own files; the owning company (HR)
+// sees its tenant's; the facility sees all. Never public — downloads go through an auth'd route.
+model SessionFile {
+  id           String          @id @default(cuid())
+  sessionId    String
+  tenantId     String // owning company (derived from the session's Training)
+  supplierId   String? // delivering supplier (derived from the session); null = HR in-house
+  kind         SessionFileKind @default(DTP)
+  fileName     String
+  mimeType     String
+  sizeBytes    Int
+  data         Bytes // the file bytes (kept out of list queries; only read on download)
+  label        String? // e.g. the participant name for a CERTIFICATE
+  uploadedById String
+  uploadedAt   DateTime        @default(now())
+
+  session TrainingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, kind])
+  @@index([tenantId])
+  @@index([supplierId])
 }
 
 model TrainingCategory {

@@ -193,6 +193,10 @@
       "dtp": "Technical-Pedagogical Dossier (DTP)",
       "certificates": "Certificates",
       "uploadsSoon": "File upload is coming soon.",
+      "upload": "Upload file",
+      "noFiles": "No files yet.",
+      "delete": "Remove",
+      "participant": "Participant (optional)",
       "hoursUnit": "hours",
       "form": {
         "nameLabel": "Module name",

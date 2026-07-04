@@ -667,3 +667,51 @@ DROP POLICY IF EXISTS tenant_isolation ON "TrainingModule";
 CREATE POLICY tenant_isolation ON "TrainingModule"
   USING (EXISTS (SELECT 1 FROM "TrainingSession" s WHERE s.id = "TrainingModule"."sessionId"))
   WITH CHECK (EXISTS (SELECT 1 FROM "TrainingSession" s WHERE s.id = "TrainingModule"."sessionId"));
+
+-- ── SessionFile (DTP + Certificates on an Ação) ──────────────────────────────
+-- tenantId + supplierId are DERIVED from the parent session's lineage by a trigger, so a
+-- client cannot forge them. RLS then mirrors TrainingSession: a SUPPLIER session sees/writes
+-- ONLY its own files (supplierId = its GUC, within its tenant); a non-supplier (HR) session
+-- sees its whole tenant's files; facility sees all. Because the trigger stamps supplierId from
+-- the session, a supplier attaching to ANOTHER supplier's session gets supplierId=<other> and
+-- fails the WITH CHECK — so cross-supplier writes are impossible. Files are never public.
+CREATE OR REPLACE FUNCTION enforce_sessionfile_lineage() RETURNS trigger AS $$
+DECLARE s_sup TEXT; t_tenant TEXT;
+BEGIN
+  SELECT ts."supplierId", tr."tenantId" INTO s_sup, t_tenant
+  FROM "TrainingSession" ts JOIN "Training" tr ON tr.id = ts."trainingId"
+  WHERE ts.id = NEW."sessionId";
+  IF t_tenant IS NULL THEN
+    RAISE EXCEPTION 'SessionFile references a non-existent or non-tenant session %', NEW."sessionId";
+  END IF;
+  NEW."supplierId" := s_sup;
+  NEW."tenantId" := t_tenant;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
+
+DROP TRIGGER IF EXISTS trg_sessionfile_lineage ON "SessionFile";
+CREATE TRIGGER trg_sessionfile_lineage
+  BEFORE INSERT OR UPDATE ON "SessionFile"
+  FOR EACH ROW EXECUTE FUNCTION enforce_sessionfile_lineage();
+
+ALTER TABLE "SessionFile" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "SessionFile" FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON "SessionFile";
+CREATE POLICY tenant_isolation ON "SessionFile"
+  USING (
+    (current_setting('app.session_kind', true) = 'supplier'
+       AND "tenantId" = nullif(current_setting('app.tenant_id', true), '')
+       AND "supplierId" = nullif(current_setting('app.supplier_id', true), ''))
+    OR (coalesce(current_setting('app.session_kind', true), '') <> 'supplier'
+        AND ("tenantId" = nullif(current_setting('app.tenant_id', true), '')
+             OR current_setting('app.is_facility', true) = 'on'))
+  )
+  WITH CHECK (
+    (current_setting('app.session_kind', true) = 'supplier'
+       AND "tenantId" = nullif(current_setting('app.tenant_id', true), '')
+       AND "supplierId" = nullif(current_setting('app.supplier_id', true), ''))
+    OR (coalesce(current_setting('app.session_kind', true), '') <> 'supplier'
+        AND ("tenantId" = nullif(current_setting('app.tenant_id', true), '')
+             OR current_setting('app.is_facility', true) = 'on'))
+  );
