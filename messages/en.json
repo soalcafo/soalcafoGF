@@ -1,6 +1,7 @@
 {
   "common": {
-    "appName": "Training Hub",
+    "appName": "Formora",
+    "tagline": "HR Training Management",
     "signIn": "Sign in",
     "signOut": "Sign out",
     "loading": "Loading...",
@@ -63,8 +64,8 @@
   "vendor": {
     "nav": { "title": "Administration", "dashboard": "Dashboard", "map": "Map", "suppliers": "Suppliers" },
     "dashboard": {
-      "title": "ATEC Administration",
-      "hint": "This is the app vendor (ATEC) area. Customer-company management and integrations are coming soon."
+      "title": "Platform administration",
+      "hint": "Platform administration area: companies, suppliers, links and accounts."
     },
     "map": {
       "title": "Connections map",

@@ -7,8 +7,8 @@ import { routing } from "@/i18n/routing";
 import "../globals.css";
 
 export const metadata: Metadata = {
-  title: "Training Hub",
-  description: "Training catalog & tracking for vocational training facilities.",
+  title: "Formora — HR Training Management",
+  description: "HR training management: catalogue, sessions, enrolments and certificates.",
 };
 
 export function generateStaticParams() {

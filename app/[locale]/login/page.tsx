@@ -14,6 +14,7 @@ export default async function LoginPage({
   const { error } = await searchParams;
   setRequestLocale(locale);
   const t = await getTranslations("auth");
+  const c = await getTranslations("common");
 
   async function login(formData: FormData) {
     "use server";
@@ -32,6 +33,10 @@ export default async function LoginPage({
 
   return (
     <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center gap-6 px-6">
+      <div className="flex items-baseline gap-2">
+        <span className="text-xl font-semibold tracking-tight text-primary">{c("appName")}</span>
+        <span className="text-sm text-muted-foreground">{c("tagline")}</span>
+      </div>
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">{t("loginTitle")}</h1>
         <p className="text-sm text-muted-foreground">{t("loginSubtitle")}</p>

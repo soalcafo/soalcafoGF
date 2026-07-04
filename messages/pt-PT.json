@@ -1,6 +1,7 @@
 {
   "common": {
-    "appName": "Training Hub",
+    "appName": "Formora",
+    "tagline": "Gestão de Formação",
     "signIn": "Entrar",
     "signOut": "Sair",
     "loading": "A carregar...",
@@ -63,8 +64,8 @@
   "vendor": {
     "nav": { "title": "Administração", "dashboard": "Painel", "map": "Mapa", "suppliers": "Fornecedores" },
     "dashboard": {
-      "title": "Administração ATEC",
-      "hint": "Esta é a área de fornecedor da aplicação (ATEC). A gestão de empresas clientes e integrações será adicionada em breve."
+      "title": "Administração da plataforma",
+      "hint": "Área de administração da plataforma: empresas, fornecedores, ligações e contas."
     },
     "map": {
       "title": "Mapa de ligações",
