@@ -73,12 +73,36 @@
       "trainings": "Trainings",
       "enrolledWorkers": "Enrolled workers"
     },
-    "trainings": {
+    "modalities": { "IN_PERSON": "In person", "ONLINE_SELF_PACED": "E-learning", "BLENDED": "Blended" },
+    "course": {
       "title": "My trainings",
       "new": "New training",
       "empty": "No trainings yet. Create your first one.",
+      "colName": "Training",
+      "colType": "Type",
+      "colDuration": "Duration",
+      "colActions": "Actions",
+      "hoursUnit": "hours",
+      "objectives": "Objectives",
+      "contents": "Programmatic contents",
+      "form": {
+        "nameLabel": "Training name",
+        "typeLabel": "Type",
+        "durationLabel": "Duration (hours)",
+        "codeLabel": "Code",
+        "objectivesLabel": "Objectives",
+        "contentsLabel": "Programmatic contents",
+        "create": "Create training",
+        "errorRequired": "Please fill in the name and duration."
+      }
+    },
+    "action": {
+      "title": "Training actions",
+      "new": "New training action",
+      "empty": "This training has no actions yet. Create the first one.",
+      "backToCourses": "Trainings",
+      "prefillHint": "Pre-filled from the training. You can edit it for this action.",
       "col": {
-        "duration": "Duration",
         "location": "Location",
         "start": "Start",
         "end": "End",
@@ -96,16 +120,33 @@
         "cancelled": "Cancelled"
       },
       "form": {
-        "titleLabel": "Training name",
-        "durationLabel": "Duration (hours)",
-        "codeLabel": "Code",
+        "nameLabel": "Action name",
+        "startLabel": "Start date",
+        "endLabel": "End date",
         "locationLabel": "Location",
         "atClientLabel": "At client premises",
         "scheduleLabel": "Schedule",
-        "startLabel": "Start date",
-        "endLabel": "End date",
-        "create": "Create training",
-        "errorRequired": "Please fill in the name, duration and dates."
+        "durationLabel": "Duration (hours)",
+        "codeLabel": "Code",
+        "objectivesLabel": "Objectives",
+        "contentsLabel": "Programmatic contents",
+        "create": "Create training action",
+        "errorRequired": "Please fill in the name and dates."
+      }
+    },
+    "module": {
+      "title": "Modules",
+      "new": "New module",
+      "empty": "This action has no modules yet.",
+      "dtp": "Technical-Pedagogical Dossier (DTP)",
+      "certificates": "Certificates",
+      "uploadsSoon": "File upload is coming soon.",
+      "hoursUnit": "hours",
+      "form": {
+        "nameLabel": "Module name",
+        "durationLabel": "Duration (hours)",
+        "contentsLabel": "Programmatic contents",
+        "create": "Add module"
       }
     }
   }

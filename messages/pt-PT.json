@@ -73,12 +73,36 @@
       "trainings": "Formações",
       "enrolledWorkers": "Colaboradores inscritos"
     },
-    "trainings": {
+    "modalities": { "IN_PERSON": "Presencial", "ONLINE_SELF_PACED": "E-learning", "BLENDED": "B-learning" },
+    "course": {
       "title": "As minhas formações",
       "new": "Nova formação",
       "empty": "Ainda não tem formações. Crie a primeira.",
+      "colName": "Formação",
+      "colType": "Tipo",
+      "colDuration": "Duração",
+      "colActions": "Ações",
+      "hoursUnit": "horas",
+      "objectives": "Objetivos",
+      "contents": "Conteúdos programáticos",
+      "form": {
+        "nameLabel": "Nome da formação",
+        "typeLabel": "Tipo",
+        "durationLabel": "Duração (horas)",
+        "codeLabel": "Sigla",
+        "objectivesLabel": "Objetivos",
+        "contentsLabel": "Conteúdos programáticos",
+        "create": "Criar formação",
+        "errorRequired": "Preencha o nome e a duração."
+      }
+    },
+    "action": {
+      "title": "Ações de formação",
+      "new": "Nova ação de formação",
+      "empty": "Esta formação ainda não tem ações. Crie a primeira.",
+      "backToCourses": "Formações",
+      "prefillHint": "Pré-preenchido a partir da formação. Pode editar para esta ação.",
       "col": {
-        "duration": "Duração",
         "location": "Local",
         "start": "Início",
         "end": "Fim",
@@ -96,16 +120,33 @@
         "cancelled": "Cancelada"
       },
       "form": {
-        "titleLabel": "Nome da formação",
-        "durationLabel": "Duração (horas)",
-        "codeLabel": "Sigla",
+        "nameLabel": "Nome da ação",
+        "startLabel": "Data de início",
+        "endLabel": "Data de fim",
         "locationLabel": "Local",
         "atClientLabel": "Nas instalações do cliente",
         "scheduleLabel": "Horário",
-        "startLabel": "Data de início",
-        "endLabel": "Data de fim",
-        "create": "Criar formação",
-        "errorRequired": "Preencha o nome, a duração e as datas."
+        "durationLabel": "Duração (horas)",
+        "codeLabel": "Sigla",
+        "objectivesLabel": "Objetivos",
+        "contentsLabel": "Conteúdos programáticos",
+        "create": "Criar ação de formação",
+        "errorRequired": "Preencha o nome e as datas."
+      }
+    },
+    "module": {
+      "title": "Módulos",
+      "new": "Novo módulo",
+      "empty": "Esta ação ainda não tem módulos.",
+      "dtp": "Dossier Técnico Pedagógico (DTP)",
+      "certificates": "Certificados",
+      "uploadsSoon": "O carregamento de ficheiros será adicionado em breve.",
+      "hoursUnit": "horas",
+      "form": {
+        "nameLabel": "Nome do módulo",
+        "durationLabel": "Duração (horas)",
+        "contentsLabel": "Conteúdos programáticos",
+        "create": "Adicionar módulo"
       }
     }
   }

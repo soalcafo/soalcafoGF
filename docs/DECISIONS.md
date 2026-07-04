@@ -52,3 +52,16 @@ Core principle: companies must feel the app is "theirs and only theirs" → **no
 - **Supplier logins are reused via email invitation** (Slack / Google-Docs pattern): HR adds a supplier + enters its contact email → the app emails an invite. If that email already has a login (from another company), accepting simply adds this company to the supplier's account (one login; a company switcher shows only the companies that invited them). If not, they create a login on accept. The inviting company's experience is identical either way and reveals nothing about prior existence.
 - **Within a company**, prevent duplicate supplier records (unique by VAT number / normalized name) — a same-tenant check only, never cross-tenant.
 - Implication: a `User` (login identity) may hold `SUPPLIER` memberships in multiple tenants; the `Supplier` **record/data** is always per-tenant and isolated.
+
+## Round 3 — 2026-07-04 — Training structure (3 levels) + vendor super-admin
+
+**Training structure** (real PT vocational-training shape):
+- **Formação / Curso (Course)** = reusable definition: objectives, programmatic contents, duration, type (presencial / e-learning / b-learning). → `Training` (+ `objectives`, `programmaticContents`; `modality`=type, `nominalMinutes`=duration).
+- **Ação de Formação** = a scheduled run of a course; **pre-filled from the course, editable**; start/end dates; optional **Módulos**; a **DTP** (document dossier) + **Certificados**. Workers enrol in an Ação. → `TrainingSession` (+ `name`/`objectives`/`programmaticContents`/`nominalMinutes`/`modality` overrides).
+- **Módulo** = optional sub-unit of an Ação: **name + duration + contents**. → new `TrainingModule` (RLS inherited from parent session via EXISTS).
+- **DTP + Certificates** = document areas on the Ação. Structure now; **file uploads (Supabase Storage) next**.
+
+**Vendor super-admin (QUEUED — build after the supplier training UI):**
+- Super-admin sees a **bipartite company↔supplier map** (many-to-many; NO company↔company or supplier↔supplier links).
+- **Master supplier list (DECIDED):** the vendor curates a canonical supplier registry; companies **pick from it** (not free-create). This canonical identity lets the map show one supplier → many companies while companies stay isolated. → introduces a vendor-level `SupplierOrg` that per-company `Supplier` rows link to. **Replaces the current free-create HR supplier flow** (built in Phase 1.2 as a placeholder).
+- **Main + sub accounts:** each company and each supplier has one "main" account (super-admin visible) + scoped sub-accounts (employees/trainers). → likely an `isPrimary` flag on `Membership`.

@@ -6,10 +6,11 @@ import { Link } from "@/i18n/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 
 export const dynamic = "force-dynamic";
 
-const SCHEDULE_TYPES = ["WORKING_HOURS", "AFTER_HOURS", "MIXED"] as const;
+const MODALITIES = ["IN_PERSON", "ONLINE_SELF_PACED", "BLENDED"] as const;
 
 function slugify(s: string): string {
   return (
@@ -23,7 +24,7 @@ function slugify(s: string): string {
   );
 }
 
-export default async function NewTrainingPage({
+export default async function NewCoursePage({
   params,
   searchParams,
 }: {
@@ -36,32 +37,29 @@ export default async function NewTrainingPage({
   await requireAuth({ capability: "supplier.offer.manage" });
   const t = await getTranslations("supplier");
 
-  async function createTraining(formData: FormData) {
+  async function createCourse(formData: FormData) {
     "use server";
     const ctx = await requireAuth({ capability: "supplier.offer.manage" });
     if (!ctx.tenantId || !ctx.supplierId) throw new Error("No supplier context");
 
     const title = String(formData.get("title") ?? "").trim();
     const durationHours = Number(formData.get("durationHours") ?? 0);
+    const rawMod = String(formData.get("modality") ?? "IN_PERSON");
+    const modality = (MODALITIES as readonly string[]).includes(rawMod)
+      ? (rawMod as (typeof MODALITIES)[number])
+      : "IN_PERSON";
     const shortCode = String(formData.get("shortCode") ?? "").trim() || null;
-    const location = String(formData.get("location") ?? "").trim() || null;
-    const atClientPremises = formData.get("atClientPremises") === "on";
-    const rawSchedule = String(formData.get("scheduleType") ?? "WORKING_HOURS");
-    const scheduleType = (SCHEDULE_TYPES as readonly string[]).includes(rawSchedule)
-      ? (rawSchedule as (typeof SCHEDULE_TYPES)[number])
-      : "WORKING_HOURS";
-    const startStr = String(formData.get("startsAt") ?? "");
-    const endStr = String(formData.get("endsAt") ?? "");
+    const objectives = String(formData.get("objectives") ?? "").trim() || null;
+    const programmaticContents = String(formData.get("programmaticContents") ?? "").trim() || null;
 
-    if (!title || !durationHours || durationHours <= 0 || !startStr || !endStr) {
+    if (!title || !durationHours || durationHours <= 0) {
       redirect(`/${locale}/portal/trainings/new?error=required`);
     }
 
     const tenantId = ctx.tenantId;
     const supplierId = ctx.supplierId;
     const sourceId = `src_sup_${supplierId}`;
-    const startsAt = new Date(`${startStr}T09:00:00`);
-    const endsAt = new Date(`${endStr}T18:00:00`);
+    let courseId = "";
 
     await forSupplier(tenantId, supplierId, async (tx) => {
       await tx.trainingSource.upsert({
@@ -79,7 +77,7 @@ export default async function NewTrainingPage({
           supplierId,
         },
       });
-      const training = await tx.training.create({
+      const course = await tx.training.create({
         data: {
           sourceId,
           tenantId,
@@ -87,26 +85,18 @@ export default async function NewTrainingPage({
           title,
           slug: `${slugify(title)}-${Date.now().toString(36)}`,
           nominalMinutes: Math.round(durationHours * 60),
+          modality,
           shortCode,
+          objectives,
+          programmaticContents,
           status: "PUBLISHED",
           requiresSession: true,
         },
       });
-      await tx.trainingSession.create({
-        data: {
-          trainingId: training.id,
-          startsAt,
-          endsAt,
-          location,
-          atClientPremises,
-          scheduleType,
-          sessionCode: shortCode,
-          status: "SCHEDULED",
-        },
-      });
+      courseId = course.id;
     });
 
-    redirect(`/${locale}/portal/trainings`);
+    redirect(`/${locale}/portal/trainings/${courseId}`);
   }
 
   const selectClass =
@@ -116,72 +106,55 @@ export default async function NewTrainingPage({
     <div className="mx-auto max-w-xl space-y-6">
       <div>
         <Link href="/portal/trainings" className="text-sm text-muted-foreground hover:text-foreground">
-          ← {t("trainings.title")}
+          ← {t("course.title")}
         </Link>
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight">{t("trainings.new")}</h1>
+        <h1 className="mt-2 text-2xl font-semibold tracking-tight">{t("course.new")}</h1>
       </div>
 
       {error ? (
-        <p
-          role="alert"
-          className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
-        >
-          {t("trainings.form.errorRequired")}
+        <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          {t("course.form.errorRequired")}
         </p>
       ) : null}
 
-      <form action={createTraining} className="space-y-4">
+      <form action={createCourse} className="space-y-4">
         <div className="space-y-1.5">
-          <Label htmlFor="title">{t("trainings.form.titleLabel")}</Label>
+          <Label htmlFor="title">{t("course.form.nameLabel")}</Label>
           <Input id="title" name="title" required autoFocus />
         </div>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div className="space-y-1.5 sm:col-span-1">
+            <Label htmlFor="modality">{t("course.form.typeLabel")}</Label>
+            <select id="modality" name="modality" defaultValue="IN_PERSON" className={selectClass}>
+              {MODALITIES.map((m) => (
+                <option key={m} value={m}>
+                  {t(`modalities.${m}`)}
+                </option>
+              ))}
+            </select>
+          </div>
           <div className="space-y-1.5">
-            <Label htmlFor="durationHours">{t("trainings.form.durationLabel")}</Label>
+            <Label htmlFor="durationHours">{t("course.form.durationLabel")}</Label>
             <Input id="durationHours" name="durationHours" type="number" min="0" step="0.5" required />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="shortCode">{t("trainings.form.codeLabel")}</Label>
+            <Label htmlFor="shortCode">{t("course.form.codeLabel")}</Label>
             <Input id="shortCode" name="shortCode" />
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div className="space-y-1.5">
-            <Label htmlFor="startsAt">{t("trainings.form.startLabel")}</Label>
-            <Input id="startsAt" name="startsAt" type="date" required />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="endsAt">{t("trainings.form.endLabel")}</Label>
-            <Input id="endsAt" name="endsAt" type="date" required />
-          </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="objectives">{t("course.form.objectivesLabel")}</Label>
+          <Textarea id="objectives" name="objectives" rows={3} />
         </div>
 
         <div className="space-y-1.5">
-          <Label htmlFor="location">{t("trainings.form.locationLabel")}</Label>
-          <Input id="location" name="location" />
+          <Label htmlFor="programmaticContents">{t("course.form.contentsLabel")}</Label>
+          <Textarea id="programmaticContents" name="programmaticContents" rows={4} />
         </div>
 
-        <div className="flex items-center gap-2">
-          <input id="atClientPremises" name="atClientPremises" type="checkbox" className="h-4 w-4 rounded border-input" />
-          <Label htmlFor="atClientPremises" className="font-normal">
-            {t("trainings.form.atClientLabel")}
-          </Label>
-        </div>
-
-        <div className="space-y-1.5">
-          <Label htmlFor="scheduleType">{t("trainings.form.scheduleLabel")}</Label>
-          <select id="scheduleType" name="scheduleType" defaultValue="WORKING_HOURS" className={selectClass}>
-            {SCHEDULE_TYPES.map((s) => (
-              <option key={s} value={s}>
-                {t(`trainings.schedule.${s}`)}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <Button type="submit">{t("trainings.form.create")}</Button>
+        <Button type="submit">{t("course.form.create")}</Button>
       </form>
     </div>
   );
