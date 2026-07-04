@@ -86,6 +86,29 @@
       "empty": "No suppliers yet. Add the first one.",
       "name": "Name",
       "email": "Email"
+    },
+    "accounts": {
+      "link": "Accounts",
+      "title": "Accounts (main and sub-accounts)",
+      "empty": "No accounts yet.",
+      "main": "Main",
+      "sub": "Sub-account",
+      "spaces": "{count} spaces",
+      "twoFaOn": "2FA on",
+      "twoFaOff": "2FA off",
+      "inactive": "Inactive",
+      "newPassword": "New password",
+      "resetPassword": "Reset password",
+      "newEmail": "New email",
+      "resetEmail": "Reset email",
+      "disable2fa": "Disable 2FA",
+      "setMain": "Set as main",
+      "addTitle": "Add account",
+      "nameLabel": "Name",
+      "emailLabel": "Email",
+      "passwordLabel": "Initial password",
+      "makeMain": "Main account",
+      "add": "Add account"
     }
   },
   "supplier": {

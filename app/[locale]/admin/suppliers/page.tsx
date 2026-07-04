@@ -78,6 +78,7 @@ export default async function AdminSuppliersPage({
               <TableRow>
                 <TableHead>{t("suppliers.name")}</TableHead>
                 <TableHead className="hidden sm:table-cell">{t("suppliers.email")}</TableHead>
+                <TableHead className="text-right">{t("accounts.link")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -88,6 +89,14 @@ export default async function AdminSuppliersPage({
                     <div className="text-xs text-muted-foreground sm:hidden">{o.contactEmail ?? "—"}</div>
                   </TableCell>
                   <TableCell className="hidden text-muted-foreground sm:table-cell">{o.contactEmail ?? "—"}</TableCell>
+                  <TableCell className="text-right">
+                    <Link
+                      href={`/admin/accounts/supplier/${o.id}`}
+                      className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                    >
+                      {t("accounts.link")}
+                    </Link>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>

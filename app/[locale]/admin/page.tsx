@@ -71,7 +71,15 @@ export default async function AdminMapPage({
             return (
               <Card key={c.id}>
                 <CardContent className="space-y-3 py-4">
-                  <div className="font-semibold">{c.name}</div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-semibold">{c.name}</span>
+                    <Link
+                      href={`/admin/accounts/company/${c.id}`}
+                      className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                    >
+                      {t("accounts.link")}
+                    </Link>
+                  </div>
 
                   {linkedOrgIds.length === 0 ? (
                     <p className="text-sm text-muted-foreground">{t("map.noLinks")}</p>

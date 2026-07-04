@@ -86,6 +86,29 @@
       "empty": "Ainda não há fornecedores. Adicione o primeiro.",
       "name": "Nome",
       "email": "Email"
+    },
+    "accounts": {
+      "link": "Contas",
+      "title": "Contas (principal e secundárias)",
+      "empty": "Ainda não há contas.",
+      "main": "Principal",
+      "sub": "Secundária",
+      "spaces": "{count} espaços",
+      "twoFaOn": "2FA ativo",
+      "twoFaOff": "2FA inativo",
+      "inactive": "Inativa",
+      "newPassword": "Nova palavra-passe",
+      "resetPassword": "Repor palavra-passe",
+      "newEmail": "Novo email",
+      "resetEmail": "Repor email",
+      "disable2fa": "Desativar 2FA",
+      "setMain": "Definir como principal",
+      "addTitle": "Adicionar conta",
+      "nameLabel": "Nome",
+      "emailLabel": "Email",
+      "passwordLabel": "Palavra-passe inicial",
+      "makeMain": "Conta principal",
+      "add": "Adicionar conta"
     }
   },
   "supplier": {

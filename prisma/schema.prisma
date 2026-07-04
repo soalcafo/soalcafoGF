@@ -232,6 +232,7 @@ model Membership {
   supplierId        String? // set when scopeType = SUPPLIER (with tenantId)
   role              MembershipRole
   status            MembershipStatus @default(INVITED)
+  isPrimary         Boolean          @default(false) // the "main" account for its company/supplier (vs sub-accounts)
   workerId          String?          @unique // single authoritative login <-> Worker link
   membershipVersion Int              @default(0)
   invitedById       String?
