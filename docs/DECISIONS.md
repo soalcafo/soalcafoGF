@@ -100,3 +100,15 @@ This is the next major phase (vendor tooling) and carries the **offer-model refa
 - **Super-admin (vendor)** manages: the master supplier list, company↔supplier **links** (the map), **branding** (logos), and **accounts** (main/sub, reset password/email/2FA).
 - **RETIRE** the supplier portal/login + `forSupplier`/`app.supplier_id`/supplier-RLS user-session layer. Isolation = existing **tenant (company) RLS** only. Much simpler and already proven.
 - **Refactor impact:** the Course→Ação→Módulo screens built in `/portal` (supplier) MOVE to `/app` (company HR) and use `forTenant` instead of `forSupplier`.
+
+## Round 5 — 2026-07-04 — Suppliers KEEP a login (reverses "no supplier login") + single shared identity
+
+Refines Round 4. The "no supplier login" simplification collided with reality: the **DTP** and **Certificados** are the certified training entity's (supplier's) deliverables, so the supplier is their natural owner. Reconciled model (confirmed with the client):
+
+- **Companies (HR) create their own courses** (Formação → Ação → **Módulos, optional**) in their private space, each attached to a supplier the company is linked to. Company↔company isolation unchanged (Worten never sees FNAC). — *built: `/app/trainings/**` on `forTenant`.*
+- **Suppliers KEEP a login** (the `/portal` + supplier-RLS layer is **retained**, not retired) — scoped to uploading **DTP + Certificates** for the Ações they deliver.
+- **One login per supplier, never one-per-company.** A supplier is a single global identity — new **`SupplierOrg`** master row (super-admin managed; **facility-only RLS**). Each company's per-tenant `Supplier` row links to it via **`Supplier.orgId`**. The same supplier User gets one `SUPPLIER` membership per linked company and uses the **existing scope switcher** to move between client spaces — no duplicate credentials. The proven per-tenant supplier RLS is **unchanged** (a big win: no security rewrite).
+- **Modules are optional** everywhere (a course/Ação with zero módulos is valid).
+- Branding (logos) + file storage still queued (Round 3/4). `Tenant.logoUrl` + `SupplierOrg.logoUrl` columns added now.
+
+**Built this round:** `SupplierOrg` model + `Supplier.orgId` + facility-only RLS (`security.sql`), seed creates ATEC/Cegoc orgs and links Worten's supplier rows (verified on live DB), and the HR `/app/trainings` course→Ação→módulo flow (nav entry "Formações"). **Next:** point the supplier `/portal` at the org (one login, one space per client), then the super-admin map/links, then DTP/cert uploads + branding, then accounts.
