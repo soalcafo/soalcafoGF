@@ -5,6 +5,7 @@ import { auth, signOut } from "@/lib/auth";
 import { requireAuth } from "@/lib/auth/require-auth";
 import { scopeHome } from "@/lib/auth/scope";
 import { switchActiveMembership } from "@/lib/auth/switch-membership";
+import { getTenantBrand } from "@/lib/db/branding";
 import { AppShell } from "@/components/app/app-shell";
 
 export const dynamic = "force-dynamic";
@@ -28,6 +29,8 @@ export default async function AppLayout({
   const session = await auth();
   const t = await getTranslations("hr");
   const c = await getTranslations("common");
+  // The company's own brand fills the header (their logo, or their name as a fallback).
+  const brand = ctx.tenantId ? await getTenantBrand(ctx.tenantId) : null;
 
   async function doSignOut() {
     "use server";
@@ -48,7 +51,8 @@ export default async function AppLayout({
 
   return (
     <AppShell
-      brand={c("appName")}
+      brand={brand?.name ?? c("appName")}
+      logoUrl={brand?.logoUrl ?? null}
       navTitle={t("nav.title")}
       items={items}
       userLabel={session?.user?.name || session?.user?.email || ""}

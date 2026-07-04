@@ -76,7 +76,10 @@
       "noLinks": "Sem fornecedores ligados.",
       "allLinked": "Todos os fornecedores estão ligados.",
       "link": "Ligar",
-      "unlink": "Remover ligação"
+      "unlink": "Remover ligação",
+      "noLogo": "Sem logótipo",
+      "uploadLogo": "Carregar logótipo",
+      "removeLogo": "Remover"
     },
     "suppliers": {
       "title": "Lista de fornecedores",

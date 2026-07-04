@@ -21,7 +21,7 @@ function slugify(s: string): string {
 }
 
 export type MapData = {
-  companies: { id: string; name: string }[];
+  companies: { id: string; name: string; logoUrl: string | null }[];
   orgs: { id: string; name: string; contactEmail: string | null }[];
   // one entry per active company<->org link (the per-tenant Supplier row)
   links: { tenantId: string; orgId: string; supplierId: string }[];
@@ -33,7 +33,7 @@ export async function getMap(): Promise<MapData> {
     const companies = await tx.tenant.findMany({
       where: { deletedAt: null },
       orderBy: { name: "asc" },
-      select: { id: true, name: true },
+      select: { id: true, name: true, logoUrl: true },
     });
     const orgs = await tx.supplierOrg.findMany({
       where: { deletedAt: null },

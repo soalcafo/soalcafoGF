@@ -181,7 +181,9 @@ model Tenant {
   status        String   @default("ACTIVE")
   catalogMode   String   @default("ALL_PUBLISHED") // "ALL_PUBLISHED" (decision #4) | "ENTITLED_SUBSET" (future)
   ssoEnabled    Boolean  @default(false)
-  logoUrl       String? // company branding: shown in this company's header + on its Ação cards
+  logoUrl       String? // when a logo is set, the served route path (/api/branding/company/<id>); else null
+  logoData      Bytes? // the logo image bytes (small; served via the branding route, browser-cached)
+  logoMime      String? // e.g. image/png
 
   workers           Worker[]
   memberships       Membership[]

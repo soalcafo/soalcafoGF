@@ -76,7 +76,10 @@
       "noLinks": "No suppliers linked.",
       "allLinked": "All suppliers are linked.",
       "link": "Link",
-      "unlink": "Remove link"
+      "unlink": "Remove link",
+      "noLogo": "No logo",
+      "uploadLogo": "Upload logo",
+      "removeLogo": "Remove"
     },
     "suppliers": {
       "title": "Supplier list",

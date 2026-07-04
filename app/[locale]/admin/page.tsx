@@ -5,6 +5,7 @@ import { Link } from "@/i18n/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { getMap, linkCompanyToSupplierOrg, unlinkCompanyFromSupplierOrg } from "@/lib/db/admin-links";
+import { setTenantLogo } from "@/lib/db/branding";
 
 export const dynamic = "force-dynamic";
 
@@ -38,6 +39,30 @@ export default async function AdminMapPage({
     const orgId = String(formData.get("orgId") ?? "");
     if (tenantId && orgId) {
       await unlinkCompanyFromSupplierOrg(tenantId, orgId);
+      revalidatePath(`/${locale}/admin`);
+    }
+  }
+
+  async function doUploadLogo(formData: FormData) {
+    "use server";
+    await requireAuth({ capability: "supplier.manage" });
+    const tenantId = String(formData.get("tenantId") ?? "");
+    const file = formData.get("logo");
+    if (tenantId && file instanceof File && file.size > 0) {
+      if (!file.type.startsWith("image/")) throw new Error("Logo must be an image");
+      if (file.size > 512 * 1024) throw new Error("Logo must be 512KB or smaller");
+      const buf = new Uint8Array(await file.arrayBuffer());
+      await setTenantLogo(tenantId, buf, file.type);
+      revalidatePath(`/${locale}/admin`);
+    }
+  }
+
+  async function doRemoveLogo(formData: FormData) {
+    "use server";
+    await requireAuth({ capability: "supplier.manage" });
+    const tenantId = String(formData.get("tenantId") ?? "");
+    if (tenantId) {
+      await setTenantLogo(tenantId, null, null);
       revalidatePath(`/${locale}/admin`);
     }
   }
@@ -79,6 +104,36 @@ export default async function AdminMapPage({
                     >
                       {t("accounts.link")}
                     </Link>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-3 rounded-md border border-border/60 bg-muted/30 p-2">
+                    {c.logoUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={c.logoUrl} alt={c.name} className="h-8 w-auto max-w-[120px] object-contain" />
+                    ) : (
+                      <span className="text-xs text-muted-foreground">{t("map.noLogo")}</span>
+                    )}
+                    <form action={doUploadLogo} className="flex items-center gap-1.5">
+                      <input type="hidden" name="tenantId" value={c.id} />
+                      <input
+                        type="file"
+                        name="logo"
+                        accept="image/*"
+                        required
+                        className="max-w-[150px] text-xs file:mr-2 file:rounded file:border-0 file:bg-secondary file:px-2 file:py-1 file:text-xs"
+                      />
+                      <Button type="submit" size="sm" variant="outline">
+                        {t("map.uploadLogo")}
+                      </Button>
+                    </form>
+                    {c.logoUrl ? (
+                      <form action={doRemoveLogo}>
+                        <input type="hidden" name="tenantId" value={c.id} />
+                        <button type="submit" className="text-xs text-muted-foreground hover:text-destructive">
+                          {t("map.removeLogo")}
+                        </button>
+                      </form>
+                    ) : null}
                   </div>
 
                   {linkedOrgIds.length === 0 ? (

@@ -10,6 +10,7 @@ import type { MembershipSummary } from "@/lib/auth/types";
 
 export function AppShell({
   brand,
+  logoUrl = null,
   navTitle,
   items,
   userLabel,
@@ -22,6 +23,7 @@ export function AppShell({
   children,
 }: {
   brand: string;
+  logoUrl?: string | null;
   navTitle: string;
   items: NavItem[];
   userLabel: string;
@@ -60,7 +62,12 @@ export function AppShell({
             </SheetContent>
           </Sheet>
         </div>
-        <span className="font-semibold">{brand}</span>
+        {logoUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={logoUrl} alt={brand} className="h-7 w-auto max-w-[160px] object-contain" />
+        ) : (
+          <span className="font-semibold">{brand}</span>
+        )}
         <div className="ml-auto flex items-center gap-3">
           {switchAction ? (
             <SpaceSwitcher
