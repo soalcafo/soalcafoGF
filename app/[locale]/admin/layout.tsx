@@ -39,7 +39,10 @@ export default async function AdminLayout({
     if (id) await switchActiveMembership(id, locale);
   }
 
-  const items = [{ href: "/admin", label: t("nav.dashboard") }];
+  const items = [
+    { href: "/admin", label: t("nav.map") },
+    { href: "/admin/suppliers", label: t("nav.suppliers") },
+  ];
 
   return (
     <AppShell

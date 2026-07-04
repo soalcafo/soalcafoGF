@@ -144,6 +144,16 @@ async function seedDemo(hrEmail: string) {
         data: { userId: user.id, scopeType: "CUSTOMER", tenantId: DEMO, role: "COMPANY_ADMIN", status: "ACTIVE" },
       });
     }
+    // Also grant vendor super-admin (FACILITY) access so /admin (the map) is reachable.
+    // The user ends up with two spaces — "Worten" (HR) and the ATEC admin — via the switcher.
+    const fac = await prisma.membership.findFirst({
+      where: { userId: user.id, scopeType: "FACILITY", role: "FACILITY_ADMIN" },
+    });
+    if (!fac) {
+      await prisma.membership.create({
+        data: { userId: user.id, scopeType: "FACILITY", role: "FACILITY_ADMIN", status: "ACTIVE" },
+      });
+    }
   }
 
   await prisma.$transaction(async (tx) => {

@@ -61,10 +61,31 @@
     }
   },
   "vendor": {
-    "nav": { "title": "Administration", "dashboard": "Dashboard" },
+    "nav": { "title": "Administration", "dashboard": "Dashboard", "map": "Map", "suppliers": "Suppliers" },
     "dashboard": {
       "title": "ATEC Administration",
       "hint": "This is the app vendor (ATEC) area. Customer-company management and integrations are coming soon."
+    },
+    "map": {
+      "title": "Connections map",
+      "hint": "Link each company to the suppliers that serve it. Linking gives the supplier a space in that company (the same login sees every company it serves).",
+      "manageSuppliers": "Suppliers",
+      "noCompanies": "No companies yet.",
+      "noOrgs": "No suppliers in the list yet.",
+      "noLinks": "No suppliers linked.",
+      "allLinked": "All suppliers are linked.",
+      "link": "Link",
+      "unlink": "Remove link"
+    },
+    "suppliers": {
+      "title": "Supplier list",
+      "hint": "The single supplier list (shared identity). Companies link to these suppliers on the map.",
+      "nameLabel": "Supplier name",
+      "emailLabel": "Contact email",
+      "add": "Add",
+      "empty": "No suppliers yet. Add the first one.",
+      "name": "Name",
+      "email": "Email"
     }
   },
   "supplier": {

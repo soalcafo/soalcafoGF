@@ -61,10 +61,31 @@
     }
   },
   "vendor": {
-    "nav": { "title": "Administração", "dashboard": "Painel" },
+    "nav": { "title": "Administração", "dashboard": "Painel", "map": "Mapa", "suppliers": "Fornecedores" },
     "dashboard": {
       "title": "Administração ATEC",
       "hint": "Esta é a área de fornecedor da aplicação (ATEC). A gestão de empresas clientes e integrações será adicionada em breve."
+    },
+    "map": {
+      "title": "Mapa de ligações",
+      "hint": "Ligue cada empresa aos fornecedores que a servem. Ao ligar, o fornecedor passa a ter um espaço nessa empresa (o mesmo login vê todas as empresas que serve).",
+      "manageSuppliers": "Fornecedores",
+      "noCompanies": "Ainda não há empresas.",
+      "noOrgs": "Ainda não há fornecedores na lista.",
+      "noLinks": "Sem fornecedores ligados.",
+      "allLinked": "Todos os fornecedores estão ligados.",
+      "link": "Ligar",
+      "unlink": "Remover ligação"
+    },
+    "suppliers": {
+      "title": "Lista de fornecedores",
+      "hint": "A lista única de fornecedores (identidade partilhada). As empresas ligam-se a estes fornecedores no mapa.",
+      "nameLabel": "Nome do fornecedor",
+      "emailLabel": "Email de contacto",
+      "add": "Adicionar",
+      "empty": "Ainda não há fornecedores. Adicione o primeiro.",
+      "name": "Nome",
+      "email": "Email"
     }
   },
   "supplier": {

@@ -112,3 +112,21 @@ Refines Round 4. The "no supplier login" simplification collided with reality: t
 - Branding (logos) + file storage still queued (Round 3/4). `Tenant.logoUrl` + `SupplierOrg.logoUrl` columns added now.
 
 **Built this round:** `SupplierOrg` model + `Supplier.orgId` + facility-only RLS (`security.sql`), seed creates ATEC/Cegoc orgs and links Worten's supplier rows (verified on live DB), and the HR `/app/trainings` course→Ação→módulo flow (nav entry "Formações"). **Next:** point the supplier `/portal` at the org (one login, one space per client), then the super-admin map/links, then DTP/cert uploads + branding, then accounts.
+
+## Round 6 — 2026-07-04 — Supplier one-login (space switch) + super-admin map
+
+Implements the switch mechanism behind "one login, one space per client", and the vendor tooling to manage links.
+
+**Supplier one-login (space switch):**
+- Auth.js JWT strategy had no way to change the active membership after sign-in. Added a `jwt({ trigger:"update" })` branch (`lib/auth/index.ts`) that rewrites `activeMembershipId`, gated so it only accepts a membership already in the user's own server-built token list. Exposed via `unstable_update`.
+- `switchActiveMembership(membershipId, locale)` (`lib/auth/switch-membership.ts`): re-checks ownership + ACTIVE status against the DB, updates the token, `revalidatePath("/","layout")`, redirects to `scopeHome`. `requireAuth` also now asserts `membership.userId === session.user.id` (defence in depth).
+- `SpaceSwitcher` (header `<select>`) shown in portal/app/admin when a user has >1 membership.
+- **Reviewed** by a 4-lens adversarial pass (ownership-bypass / session-correctness / isolation-regression / runtime-boundary) — all `pass`, guard confirmed layered three-deep. New `tests/isolation/multi-company-supplier.test.ts` (6 cases) proves a two-company supplier can't cross the boundary; 15/15 isolation tests green.
+
+**Super-admin map (`/admin`):**
+- `/admin` = the **connections map**: each company card lists its linked suppliers (chips) with link (`<select>` of unlinked orgs) + unlink (×) controls. `/admin/suppliers` = the master list (view + add `SupplierOrg`).
+- `lib/db/admin-links.ts` (facility-only, via `asFacility`): `getMap`, `createSupplierOrg`, `linkCompanyToSupplierOrg` (creates/reactivates the per-tenant `Supplier` row **and** provisions a space for every existing org login via `ensureSupplierMembership`), `unlinkCompanyFromSupplierOrg` (soft-deletes the row + suspends its supplier logins). Gated on the existing `supplier.manage` capability (facility only) — no new capabilities.
+- Facility-context cross-tenant `Supplier` write verified on the live DB.
+- Seed now grants the demo admin a `FACILITY_ADMIN` membership too, so `/admin` is reachable and the switcher shows "Worten" ↔ "Admin". A second demo company **FNAC** is linked to ATEC so `formacao@atec.pt` holds two spaces.
+
+**Next:** DTP + Certificate uploads (file storage), branding (logos), accounts (main/sub + resets).
