@@ -358,6 +358,16 @@ CREATE INDEX IF NOT EXISTS "ix_enroll_active_supplier"
   ON "Enrollment" ("supplierId", "workerId", "tenantId")
   WHERE "deletedAt" IS NULL AND "status" NOT IN ('CANCELLED', 'NO_SHOW');
 
+-- ── SupplierOrg (master list): the global supplier identity. Managed ONLY by the
+--    super-admin (facility). No tenant owns it; no company/supplier session may read or
+--    write it. Companies interact with their per-tenant "Supplier" row instead. ──
+ALTER TABLE "SupplierOrg" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "SupplierOrg" FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS facility_only ON "SupplierOrg";
+CREATE POLICY facility_only ON "SupplierOrg"
+  USING (current_setting('app.is_facility', true) = 'on')
+  WITH CHECK (current_setting('app.is_facility', true) = 'on');
+
 -- ── Supplier table: a supplier session sees ONLY its own row (never other suppliers) ──
 ALTER TABLE "Supplier" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "Supplier" FORCE ROW LEVEL SECURITY;

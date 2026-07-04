@@ -181,6 +181,7 @@ model Tenant {
   status        String   @default("ACTIVE")
   catalogMode   String   @default("ALL_PUBLISHED") // "ALL_PUBLISHED" (decision #4) | "ENTITLED_SUBSET" (future)
   ssoEnabled    Boolean  @default(false)
+  logoUrl       String? // company branding: shown in this company's header + on its Ação cards
 
   workers           Worker[]
   memberships       Membership[]
@@ -250,12 +251,42 @@ model Membership {
   //   CUSTOMER→(tenantId set, supplierId NULL); SUPPLIER→(tenantId set, supplierId set).
 }
 
-// A per-company training supplier (NEVER cross-tenant). Suppliers get login accounts
-// (Membership scopeType=SUPPLIER) created/invited by a company's HR; each supplier's
-// data is isolated from other suppliers within the same company (supplier-level RLS).
+// The SINGLE real-world supplier identity (e.g. "ATEC"), global across all companies.
+// This is the master-list entry the super-admin (facility) manages and links companies to.
+// It exists so a supplier that serves many companies has ONE identity (and, downstream,
+// ONE login with a space per client) instead of a separate copy per company.
+// No tenantId: SupplierOrg is not owned by any company. RLS: facility-only (see security.sql).
+model SupplierOrg {
+  id             String  @id @default(cuid())
+  name           String
+  normalizedName String // for idempotent find-or-create / dedup
+  slug           String  @unique
+  legalName      String?
+  vatNumber      String? @unique
+  contactEmail   String?
+  contactPhone   String?
+  website        String?
+  logoUrl        String? // supplier branding (used later on supplier-facing views)
+  status         String  @default("ACTIVE") // ACTIVE | SUSPENDED
+
+  suppliers Supplier[] // per-company attachments of this org
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([normalizedName])
+  @@index([status])
+}
+
+// A per-company attachment of a SupplierOrg into ONE company (NEVER cross-tenant). This is
+// the row every tenant-scoped query and the whole supplier-level RLS is built around; the
+// global identity lives on the linked SupplierOrg. A supplier login gets one SUPPLIER
+// Membership per company its org is linked to (single login, one space per client).
 model Supplier {
   id             String  @id @default(cuid())
   tenantId       String // per-company; suppliers NEVER cross tenants
+  orgId          String? // link to the shared global identity (SupplierOrg); backfilled then required
   name           String
   normalizedName String // for idempotent find-or-create
   slug           String
@@ -268,6 +299,7 @@ model Supplier {
   status         String  @default("ACTIVE") // ACTIVE | SUSPENDED
 
   tenant      Tenant             @relation(fields: [tenantId], references: [id])
+  org         SupplierOrg?       @relation(fields: [orgId], references: [id])
   memberships Membership[]       @relation("SupplierMemberships")
   sources     TrainingSource[]
   trainings   Training[]
@@ -281,7 +313,9 @@ model Supplier {
 
   @@unique([id, tenantId]) // composite-FK target (same-tenant guarantee)
   @@unique([tenantId, slug])
+  @@unique([tenantId, orgId]) // a company links a given supplier org at most once
   @@index([tenantId, status])
+  @@index([orgId])
   // SQL partial UNIQUE: (tenantId, normalizedName) WHERE deletedAt IS NULL — idempotent HR create
 }
 

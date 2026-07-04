@@ -37,6 +37,7 @@
     "nav": {
       "title": "User area",
       "dashboard": "Dashboard",
+      "trainings": "Trainings",
       "suppliers": "Suppliers",
       "workers": "Workers"
     },
@@ -94,7 +95,8 @@
         "objectivesLabel": "Objectives",
         "contentsLabel": "Programmatic contents",
         "create": "Create training",
-        "errorRequired": "Please fill in the name and duration."
+        "errorRequired": "Please fill in the name and duration.",
+        "noSuppliers": "Your company is not linked to any supplier yet. Ask your administrator to link a supplier to your company."
       }
     },
     "action": {

@@ -35,6 +35,7 @@ export default async function AppLayout({
 
   const items = [
     { href: "/app", label: t("nav.dashboard") },
+    { href: "/app/trainings", label: t("nav.trainings") },
     { href: "/app/suppliers", label: t("nav.suppliers") },
   ];
 

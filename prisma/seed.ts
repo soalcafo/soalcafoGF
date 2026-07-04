@@ -65,7 +65,21 @@ async function main() {
         });
       }
     }
-  });
+
+    // Global supplier master list (SupplierOrg) — the single shared identities that
+    // companies attach to. Managed by the super-admin; facility context is already set.
+    const ORGS: Array<[string, string, string]> = [
+      ["org_atec", "ATEC", "formacao@atec.pt"],
+      ["org_cegoc", "Cegoc", "formacao@cegoc.pt"],
+    ];
+    for (const [id, name, contactEmail] of ORGS) {
+      await tx.supplierOrg.upsert({
+        where: { id },
+        update: { name, contactEmail },
+        create: { id, name, normalizedName: name.toLowerCase(), slug: id.replace(/_/g, "-"), contactEmail },
+      });
+    }
+  }, { timeout: 60000, maxWait: 20000 });
 
   // Optional demo facility admin (no RLS on User/Membership).
   const adminEmail = process.env.SEED_ADMIN_EMAIL?.toLowerCase();
@@ -133,17 +147,20 @@ async function seedDemo(hrEmail: string) {
 
   await prisma.$transaction(async (tx) => {
     await tx.$queryRawUnsafe(`SELECT set_config('app.tenant_id', '${DEMO}', true)`);
-    const demoSuppliers: Array<[string, string, boolean, string]> = [
-      ["demo_sup_atec", "ATEC", true, "formacao@atec.pt"],
-      ["demo_sup_xpto", "Cegoc", false, "formacao@cegoc.pt"],
+    // [id, name, isAtec, contactEmail, orgId] — orgId links this company's supplier row
+    // to the shared global identity (SupplierOrg) so the same supplier is "one ATEC".
+    const demoSuppliers: Array<[string, string, boolean, string, string]> = [
+      ["demo_sup_atec", "ATEC", true, "formacao@atec.pt", "org_atec"],
+      ["demo_sup_xpto", "Cegoc", false, "formacao@cegoc.pt", "org_cegoc"],
     ];
-    for (const [id, name, isAtec, contactEmail] of demoSuppliers) {
+    for (const [id, name, isAtec, contactEmail, orgId] of demoSuppliers) {
       await tx.supplier.upsert({
         where: { id },
-        update: { name, isAtec, contactEmail },
+        update: { name, isAtec, contactEmail, orgId },
         create: {
           id,
           tenantId: DEMO,
+          orgId,
           name,
           normalizedName: name.toLowerCase(),
           slug: id.replace(/_/g, "-"),
@@ -152,7 +169,7 @@ async function seedDemo(hrEmail: string) {
         },
       });
     }
-  });
+  }, { timeout: 60000, maxWait: 20000 });
 
   console.log(`Seeded demo company + HR membership (${hrEmail}) + suppliers.`);
 }

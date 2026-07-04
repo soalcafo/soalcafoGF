@@ -37,6 +37,7 @@
     "nav": {
       "title": "Área de utilizador",
       "dashboard": "Painel",
+      "trainings": "Formações",
       "suppliers": "Fornecedores",
       "workers": "Colaboradores"
     },
@@ -94,7 +95,8 @@
         "objectivesLabel": "Objetivos",
         "contentsLabel": "Conteúdos programáticos",
         "create": "Criar formação",
-        "errorRequired": "Preencha o nome e a duração."
+        "errorRequired": "Preencha o nome e a duração.",
+        "noSuppliers": "A sua empresa ainda não está associada a nenhum fornecedor. Peça ao administrador para associar um fornecedor à sua empresa."
       }
     },
     "action": {
