@@ -87,6 +87,7 @@
       "contents": "Conteúdos programáticos",
       "form": {
         "nameLabel": "Nome da formação",
+        "supplierLabel": "Fornecedor",
         "typeLabel": "Tipo",
         "durationLabel": "Duração (horas)",
         "codeLabel": "Sigla",

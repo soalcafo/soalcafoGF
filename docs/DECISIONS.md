@@ -65,3 +65,38 @@ Core principle: companies must feel the app is "theirs and only theirs" → **no
 - Super-admin sees a **bipartite company↔supplier map** (many-to-many; NO company↔company or supplier↔supplier links).
 - **Master supplier list (DECIDED):** the vendor curates a canonical supplier registry; companies **pick from it** (not free-create). This canonical identity lets the map show one supplier → many companies while companies stay isolated. → introduces a vendor-level `SupplierOrg` that per-company `Supplier` rows link to. **Replaces the current free-create HR supplier flow** (built in Phase 1.2 as a placeholder).
 - **Main + sub accounts:** each company and each supplier has one "main" account (super-admin visible) + scoped sub-accounts (employees/trainers). → likely an `isPrimary` flag on `Membership`.
+
+### Shared OFFERS vs private AÇÕES (2026-07-04 — key clarification, refines Round 3)
+
+From the Worten/FNAC example (both run ATEC's "Liderança Operacional de Equipas", on different dates):
+
+- A supplier's **Offers (course catalog / Formações)** are **SHARED**: every company linked to that supplier sees the same offers. → Offers belong at the **supplier (SupplierOrg) level**, NOT per-company. This **refactors** the Phase-1.3 per-company `Training` (which was the single-company approximation — still valid as a stepping stone).
+- An **Ação de Formação (a scheduled run with dates)** is **PRIVATE per company↔supplier link**. Worten's run ≠ FNAC's run; each company sees ONLY its own. A company NEVER sees another company's Ações, even when linked to the same supplier.
+- Suppliers never see other suppliers' offers (existing isolation).
+- The company↔supplier link is per-pair (individual); links are bipartite (only company↔supplier).
+
+**Super-admin panel spec:**
+- A board of **boxes** (companies + suppliers) with **lines** for connections (the bipartite map).
+- Click an entity's box → manage its **main account**: reset password, reset email, reset/disable 2FA.
+- Click a supplier (or company) → **link it** to another company (or supplier), creating a connection.
+
+This is the next major phase (vendor tooling) and carries the **offer-model refactor**: offers → supplier-level & shared; Ações → per company↔supplier link.
+
+### Per-company (and per-supplier) branding (2026-07-04)
+
+- Each **Company (tenant)** has a **logo**, uploadable by the company's **main account** OR the **super-admin**. Company users ALWAYS see their OWN company logo in the app header — **including while browsing a supplier's offers** (they never see the supplier's logo as their own branding).
+- Each **Supplier** has its own logo; supplier users see their own logo in the portal.
+- Every **Ação de Formação card** shows the logo of the **company running that Ação** — so a supplier delivering the same shared offer to several companies can tell Worten's run from FNAC's at a glance.
+- Requires **file storage** (Supabase Storage) — the same "uploads" piece deferred for DTP/certificates; set it up once, it covers logos + documents. Store `logoUrl`/`logoKey` on `Tenant` + `Supplier`.
+- Folds into the super-admin phase (logo fields on the entities + super-admin upload + the Ação-card company logo). No isolation impact — logos are just branding assets.
+
+### Model SIMPLIFICATION (2026-07-04) — no supplier logins; per-company private trainings
+
+**Supersedes the "shared offers" design** (`docs/SUPERADMIN-MODEL.md` is now over-engineered — only its SupplierOrg + CompanySupplierLink + super-admin-UI + accounts + branding parts carry over; the shared-Training / `has_active_link` / RLS-swap machinery is SHELVED).
+
+- **Suppliers have NO login and no portal.** A supplier is an entry in a vendor-curated **master list** (`SupplierOrg`, e.g. ATEC), referenced by companies.
+- **Each company's HR creates its OWN trainings** (Formação → Ação → Módulos) under a supplier, chosen from the suppliers the company is linked to. **Private per company** — Worten and FNAC, both linked to ATEC, do NOT see each other's trainings. There are **NO shared offers**.
+- The supplier "space" is a shared **taxonomy** (the supplier name from the master list) with per-company-**private** content, hidden between companies.
+- **Super-admin (vendor)** manages: the master supplier list, company↔supplier **links** (the map), **branding** (logos), and **accounts** (main/sub, reset password/email/2FA).
+- **RETIRE** the supplier portal/login + `forSupplier`/`app.supplier_id`/supplier-RLS user-session layer. Isolation = existing **tenant (company) RLS** only. Much simpler and already proven.
+- **Refactor impact:** the Course→Ação→Módulo screens built in `/portal` (supplier) MOVE to `/app` (company HR) and use `forTenant` instead of `forSupplier`.

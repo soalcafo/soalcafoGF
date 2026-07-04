@@ -87,6 +87,7 @@
       "contents": "Programmatic contents",
       "form": {
         "nameLabel": "Training name",
+        "supplierLabel": "Supplier",
         "typeLabel": "Type",
         "durationLabel": "Duration (hours)",
         "codeLabel": "Code",

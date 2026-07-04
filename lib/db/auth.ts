@@ -1,6 +1,7 @@
 // Auth-only database access. User/Membership/Account tables are NOT tenant-scoped
 // (a user exists before any tenant context), so these run on the raw client.
 // Kept inside lib/db/** so all raw DB access stays in one place.
+import { cache } from "react";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import { prisma } from "./client";
 
@@ -48,8 +49,9 @@ export async function getActiveMembershipsForUser(userId: string) {
  * WHICH membership; capabilities/role/status are re-read here on every request so a
  * downgrade or suspension takes effect immediately (cache this with a short TTL).
  */
-export async function getMembershipById(membershipId: string) {
-  return prisma.membership.findUnique({
+// Cached per request so requireAuth() called in both a layout and its page hits the DB once.
+export const getMembershipById = cache((membershipId: string) =>
+  prisma.membership.findUnique({
     where: { id: membershipId },
     select: {
       id: true,
@@ -62,5 +64,5 @@ export async function getMembershipById(membershipId: string) {
       membershipVersion: true,
       workerId: true,
     },
-  });
-}
+  }),
+);
