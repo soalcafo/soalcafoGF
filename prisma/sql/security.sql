@@ -647,3 +647,13 @@ DROP TRIGGER IF EXISTS trg_certificate_supplier ON "Certificate";
 CREATE TRIGGER trg_certificate_supplier
   BEFORE INSERT OR UPDATE ON "Certificate"
   FOR EACH ROW EXECUTE FUNCTION enforce_certificate_supplier();
+
+-- ── TrainingModule (Módulo): isolation inherited from its parent Ação (TrainingSession).
+--    Postgres applies TrainingSession's RLS inside the subquery, so a supplier only ever
+--    sees modules of its own sessions, and HR sees all in-tenant. ──
+ALTER TABLE "TrainingModule" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "TrainingModule" FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON "TrainingModule";
+CREATE POLICY tenant_isolation ON "TrainingModule"
+  USING (EXISTS (SELECT 1 FROM "TrainingSession" s WHERE s.id = "TrainingModule"."sessionId"))
+  WITH CHECK (EXISTS (SELECT 1 FROM "TrainingSession" s WHERE s.id = "TrainingModule"."sessionId"));

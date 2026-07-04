@@ -393,7 +393,9 @@ model Training {
   slug              String
   summary           String?
   description       String?
-  modality          TrainingModality @default(IN_PERSON)
+  objectives           String? // Objetivos (course)
+  programmaticContents String? // Conteúdos programáticos (course)
+  modality          TrainingModality @default(IN_PERSON) // Tipo: presencial / e-learning / b-learning
   nominalMinutes    Int
   language          String           @default("pt-PT")
   certificationName String?
@@ -455,6 +457,13 @@ model TrainingSession {
   supplierId  String? // MUST equal parent Training.supplierId (trigger 4d + NOT VALID CHECK)
   sessionCode String?
 
+  // Ação de Formação — a scheduled run of a course; pre-filled from the course, editable.
+  name                 String? // defaults to the course title
+  objectives           String?
+  programmaticContents String?
+  nominalMinutes       Int? // duration override; else the course's nominalMinutes
+  modality             TrainingModality? // type override
+
   startsAt DateTime @db.Timestamptz(6)
   endsAt   DateTime @db.Timestamptz(6)
   timezone String   @default("Europe/Lisbon")
@@ -475,9 +484,10 @@ model TrainingSession {
   provenance  Provenance @default(ADMIN_MANUAL)
   externalRef String?
 
-  training    Training     @relation(fields: [trainingId], references: [id], onDelete: Cascade)
-  supplier    Supplier?    @relation(fields: [supplierId], references: [id]) // tenant pinned via parent Training + trigger 4d
+  training    Training         @relation(fields: [trainingId], references: [id], onDelete: Cascade)
+  supplier    Supplier?        @relation(fields: [supplierId], references: [id]) // tenant pinned via parent Training + trigger 4d
   enrollments Enrollment[]
+  modules     TrainingModule[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -488,6 +498,25 @@ model TrainingSession {
   @@index([status, startsAt])
   // SQL partial UNIQUE: (trainingId, externalRef) WHERE externalRef IS NOT NULL
   // SQL: generated tstzrange(startsAt, endsAt) column + GiST index for the timeline.
+}
+
+// Módulo — an optional sub-unit inside an Ação de Formação (TrainingSession).
+// Isolation is inherited from the parent session (RLS EXISTS; see security.sql).
+model TrainingModule {
+  id                   String  @id @default(cuid())
+  sessionId            String
+  orderIndex           Int     @default(0)
+  name                 String
+  nominalMinutes       Int     @default(0) // duration
+  objectives           String?
+  programmaticContents String?
+
+  session TrainingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([sessionId, orderIndex])
 }
 
 model TrainingCategory {
