@@ -32,7 +32,9 @@ export async function requireAuth(opts?: { capability?: Capability }): Promise<A
   }
 
   const membership = await getMembershipById(session.activeMembershipId);
-  if (!membership || membership.status !== "ACTIVE") {
+  // Re-check ownership + status on every request: the active membership must still exist,
+  // still belong to THIS user (defence in depth for the space-switch path), and be ACTIVE.
+  if (!membership || membership.userId !== session.user.id || membership.status !== "ACTIVE") {
     redirect("/login");
   }
 

@@ -4,7 +4,8 @@
     "signIn": "Entrar",
     "signOut": "Sair",
     "loading": "A carregar...",
-    "language": "Idioma"
+    "language": "Idioma",
+    "switchSpace": "Mudar de espaço"
   },
   "nav": {
     "catalog": "Catálogo",

@@ -6,8 +6,10 @@ export type MembershipSummary = {
   id: string;
   scopeType: ScopeType;
   scopeId: string | null; // tenantId or supplierId; null for FACILITY scope
+  tenantId: string | null; // set for CUSTOMER and SUPPLIER scopes
+  supplierId: string | null; // set only when scopeType === "SUPPLIER"
   role: MembershipRole;
-  label: string | null; // e.g. the customer company name
+  label: string | null; // e.g. the customer company name (the "space" the user switches into)
 };
 
 /** The resolved authorization context returned by requireAuth(). */

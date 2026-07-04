@@ -12,7 +12,7 @@ const credentialsSchema = z.object({
   password: z.string().min(1),
 });
 
-export const { handlers, auth, signIn, signOut } = NextAuth({
+export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
   ...authConfig,
   adapter: authAdapter,
   providers: [
@@ -37,7 +37,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       : []),
   ],
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger, session }) {
       // Runs with DB access only at sign-in (when `user` is present). On normal
       // requests the token already carries these claims and we just pass it through.
       if (user?.id) {
@@ -47,11 +47,25 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           id: m.id,
           scopeType: m.scopeType,
           scopeId: m.tenantId ?? m.supplierId ?? null,
+          tenantId: m.tenantId ?? null,
+          supplierId: m.supplierId ?? null,
           role: m.role,
           label: m.tenant?.name ?? null,
         }));
         token.memberships = summaries;
         token.activeMembershipId = pickDefaultMembership(summaries)?.id ?? null;
+      }
+      // Space switch: unstable_update({ activeMembershipId }) reaches us here as `session`.
+      // SECURITY: only honour a target that is already one of THIS user's own memberships
+      // (token.memberships was built from the DB for this user at sign-in), so the client can
+      // never point the session at a membership that isn't theirs. The DB status is re-checked
+      // in switchActiveMembership() and again per-request in requireAuth().
+      if (trigger === "update" && session && typeof session === "object") {
+        const requested = (session as { activeMembershipId?: unknown }).activeMembershipId;
+        const owned =
+          typeof requested === "string" &&
+          (token.memberships as MembershipSummary[] | undefined)?.some((m) => m.id === requested);
+        if (owned) token.activeMembershipId = requested;
       }
       return token;
     },

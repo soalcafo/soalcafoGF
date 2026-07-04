@@ -109,6 +109,7 @@ async function main() {
 
   if (process.env.SEED_DEMO && adminEmail) {
     await seedDemo(adminEmail);
+    await seedSecondCompany();
   }
 
   if (process.env.SEED_SUPPLIER_EMAIL && process.env.SEED_SUPPLIER_PASSWORD) {
@@ -172,6 +173,66 @@ async function seedDemo(hrEmail: string) {
   }, { timeout: 60000, maxWait: 20000 });
 
   console.log(`Seeded demo company + HR membership (${hrEmail}) + suppliers.`);
+}
+
+// A SECOND demo company (FNAC), also linked to the shared ATEC supplier org. This proves
+// "one login, one space per client": if the ATEC supplier login exists, it gets ONE
+// membership per company (Worten + FNAC) — the same login, two switchable spaces.
+async function seedSecondCompany() {
+  const FNAC = "demo_tenant_fnac";
+  const FNAC_ATEC = "demo_sup_atec_fnac";
+
+  await prisma.tenant.upsert({
+    where: { id: FNAC },
+    update: { name: "FNAC", slug: "fnac" },
+    create: { id: FNAC, name: "FNAC", slug: "fnac" },
+  });
+
+  await prisma.$transaction(
+    async (tx) => {
+      await tx.$queryRawUnsafe(`SELECT set_config('app.tenant_id', '${FNAC}', true)`);
+      await tx.supplier.upsert({
+        where: { id: FNAC_ATEC },
+        update: { name: "ATEC", isAtec: true, orgId: "org_atec", contactEmail: "formacao@atec.pt" },
+        create: {
+          id: FNAC_ATEC,
+          tenantId: FNAC,
+          orgId: "org_atec",
+          name: "ATEC",
+          normalizedName: "atec",
+          slug: "demo-sup-atec-fnac",
+          isAtec: true,
+          contactEmail: "formacao@atec.pt",
+        },
+      });
+    },
+    { timeout: 60000, maxWait: 20000 },
+  );
+
+  const supUser = await prisma.user.findUnique({ where: { email: "formacao@atec.pt" } });
+  if (supUser) {
+    await ensureDemoSupplierMembership(supUser.id, "demo_tenant", "demo_sup_atec");
+    await ensureDemoSupplierMembership(supUser.id, FNAC, FNAC_ATEC);
+    console.log("Linked ATEC supplier login to Worten + FNAC (one login, two spaces).");
+  } else {
+    console.log("ATEC supplier login not found; skipped multi-space demo (set SEED_SUPPLIER_* to create it).");
+  }
+}
+
+// Idempotently ensure a supplier login has an ACTIVE SUPPLIER_PORTAL membership in one company.
+async function ensureDemoSupplierMembership(userId: string, tenantId: string, supplierId: string) {
+  const existing = await prisma.membership.findFirst({
+    where: { userId, scopeType: "SUPPLIER", tenantId, supplierId, role: "SUPPLIER_PORTAL" },
+  });
+  if (existing) {
+    if (existing.status !== "ACTIVE") {
+      await prisma.membership.update({ where: { id: existing.id }, data: { status: "ACTIVE" } });
+    }
+    return;
+  }
+  await prisma.membership.create({
+    data: { userId, scopeType: "SUPPLIER", tenantId, supplierId, role: "SUPPLIER_PORTAL", status: "ACTIVE" },
+  });
 }
 
 // Creates a supplier LOGIN: a user + a SUPPLIER_PORTAL membership bound to one
